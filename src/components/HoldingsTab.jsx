@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ExchPill from './ExchPill'
 import { fmtCcy, fmt } from '../utils'
 import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
 
+const STORAGE_KEY = 'deleted_tickers'
+
 const COLS = [
-  { key: 'eodhd',  label: 'Ticker',  num: false },
-  { key: 'name',   label: 'Name',    num: false },
-  { key: 'value',  label: 'Value',   num: true  },
-  { key: 'weight', label: 'Weight',  num: true  },
-  { key: 'close',  label: 'Close',   num: true  },
-  { key: 'pct',    label: '% Today', num: true  },
+  { key: 'eodhd',  label: 'Ticker',   num: false },
+  { key: 'name',   label: 'Name',     num: false },
+  { key: 'value',  label: 'Value',    num: true  },
+  { key: 'weight', label: 'Weight',   num: true  },
+  { key: 'close',  label: 'Close',    num: true  },
+  { key: 'pct',    label: '% Today',  num: true  },
 ]
 
 const STRING_COLS = new Set(['eodhd', 'name'])
@@ -31,9 +33,7 @@ function safeSort(a, b, col, dir) {
     if (!aOk) return 1
     if (!bOk) return -1
     return dir === 'asc' ? an - bn : bn - an
-  } catch {
-    return 0
-  }
+  } catch { return 0 }
 }
 
 export default function HoldingsTab({ prices, loading }) {
@@ -41,6 +41,19 @@ export default function HoldingsTab({ prices, loading }) {
   const [sortDir,    setSortDir]    = useState('desc')
   const [filter,     setFilter]     = useState('')
   const [exchFilter, setExchFilter] = useState('All')
+  const [deleted,    setDeleted]    = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')) }
+    catch { return new Set() }
+  })
+  const [showDeleted, setShowDeleted] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...deleted]))
+  }, [deleted])
+
+  const deleteTicker  = (t) => setDeleted(prev => new Set([...prev, t]))
+  const restoreTicker = (t) => setDeleted(prev => { const s = new Set(prev); s.delete(t); return s })
+  const restoreAll    = ()  => setDeleted(new Set())
 
   const rows = PORTFOLIO.map(h => ({
     ...h,
@@ -50,7 +63,10 @@ export default function HoldingsTab({ prices, loading }) {
 
   const exchanges = ['All', ...Array.from(new Set(PORTFOLIO.map(h => h.exch))).sort()]
 
-  const filtered = rows.filter(r => {
+  const activeRows  = rows.filter(r => !deleted.has(r.eodhd))
+  const deletedRows = rows.filter(r =>  deleted.has(r.eodhd))
+
+  const filtered = activeRows.filter(r => {
     const q = filter.toLowerCase()
     const matchText = !q || r.eodhd.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)
     const matchExch = exchFilter === 'All' || r.exch === exchFilter
@@ -71,6 +87,7 @@ export default function HoldingsTab({ prices, loading }) {
 
   return (
     <>
+      {/* Toolbar */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           placeholder="🔍  Search ticker or name…"
@@ -94,13 +111,24 @@ export default function HoldingsTab({ prices, loading }) {
             </button>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: '#a0aec0', marginLeft: 'auto' }}>
-          {sorted.length} of {PORTFOLIO.length} holdings
-          {loading && <span style={{ marginLeft: 8, color: '#3182ce' }}>· loading prices…</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+          {deleted.size > 0 && (
+            <button onClick={() => setShowDeleted(v => !v)} style={{
+              fontSize: 12, color: '#718096', background: 'none', border: '1px solid #e2e8f0',
+              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+            }}>
+              {showDeleted ? 'Hide deleted' : `${deleted.size} hidden`}
+            </button>
+          )}
+          <div style={{ fontSize: 12, color: '#a0aec0' }}>
+            {sorted.length} holdings
+            {loading && <span style={{ marginLeft: 8, color: '#3182ce' }}>· loading…</span>}
+          </div>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Active holdings table */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         <table style={{ width: '100%' }}>
           <thead>
             <tr>
@@ -111,6 +139,7 @@ export default function HoldingsTab({ prices, loading }) {
                   {c.label} <SortIcon col={c.key} />
                 </th>
               ))}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -144,12 +173,61 @@ export default function HoldingsTab({ prices, loading }) {
                       <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
                     )}
                   </td>
+                  <td style={{ paddingRight: 12, textAlign: 'right' }}>
+                    <button
+                      onClick={() => deleteTicker(r.eodhd)}
+                      title="Hide holding"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#cbd5e1', fontSize: 14, padding: '2px 4px',
+                        borderRadius: 4, lineHeight: 1,
+                      }}
+                      onMouseEnter={e => e.target.style.color = '#e53e3e'}
+                      onMouseLeave={e => e.target.style.color = '#cbd5e1'}
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Deleted / hidden holdings */}
+      {showDeleted && deleted.size > 0 && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>Hidden holdings ({deleted.size})</span>
+            <button onClick={restoreAll} style={{
+              fontSize: 12, color: '#3182ce', background: 'none', border: '1px solid #bee3f8',
+              borderRadius: 8, padding: '4px 12px', cursor: 'pointer',
+            }}>Restore all</button>
+          </div>
+          <table style={{ width: '100%' }}>
+            <tbody>
+              {deletedRows.map(r => (
+                <tr key={r.eodhd} style={{ opacity: 0.5 }}>
+                  <td style={{ paddingLeft: 16 }}>
+                    <span style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd}</span>
+                    {' '}<ExchPill exch={r.exch} />
+                  </td>
+                  <td style={{ fontSize: 12, color: '#718096' }}>{r.name}</td>
+                  <td className="num" style={{ fontSize: 12 }}>{fmtCcy(r.value)}</td>
+                  <td style={{ paddingRight: 12, textAlign: 'right' }}>
+                    <button onClick={() => restoreTicker(r.eodhd)} style={{
+                      fontSize: 11, color: '#3182ce', background: 'none',
+                      border: '1px solid #bee3f8', borderRadius: 6,
+                      padding: '3px 10px', cursor: 'pointer',
+                    }}>Restore</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   )
 }
