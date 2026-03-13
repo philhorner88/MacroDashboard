@@ -4,24 +4,36 @@ import { fmtCcy, fmt } from '../utils'
 import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
 
 const COLS = [
-  { key: 'eodhd',  label: 'Ticker',   num: false },
-  { key: 'name',   label: 'Name',     num: false },
-  { key: 'value',  label: 'Value',    num: true  },
-  { key: 'weight', label: 'Weight',   num: true  },
-  { key: 'close',  label: 'Close',    num: true  },
-  { key: 'pct',    label: '% Today',  num: true  },
+  { key: 'eodhd',  label: 'Ticker',  num: false },
+  { key: 'name',   label: 'Name',    num: false },
+  { key: 'value',  label: 'Value',   num: true  },
+  { key: 'weight', label: 'Weight',  num: true  },
+  { key: 'close',  label: 'Close',   num: true  },
+  { key: 'pct',    label: '% Today', num: true  },
 ]
 
+const STRING_COLS = new Set(['eodhd', 'name'])
+
 function safeSort(a, b, col, dir) {
-  const av = a[col]
-  const bv = b[col]
-  const aOk = av != null && av !== '' && !Number.isNaN(av)
-  const bOk = bv != null && bv !== '' && !Number.isNaN(bv)
-  if (!aOk && !bOk) return 0
-  if (!aOk) return 1
-  if (!bOk) return -1
-  if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-  return dir === 'asc' ? av - bv : bv - av
+  try {
+    const av = a[col]
+    const bv = b[col]
+    if (STRING_COLS.has(col)) {
+      const as = String(av ?? '')
+      const bs = String(bv ?? '')
+      return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+    }
+    const an = parseFloat(av)
+    const bn = parseFloat(bv)
+    const aOk = isFinite(an)
+    const bOk = isFinite(bn)
+    if (!aOk && !bOk) return 0
+    if (!aOk) return 1
+    if (!bOk) return -1
+    return dir === 'asc' ? an - bn : bn - an
+  } catch {
+    return 0
+  }
 }
 
 export default function HoldingsTab({ prices, loading }) {
@@ -102,35 +114,39 @@ export default function HoldingsTab({ prices, loading }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => (
-              <tr key={r.eodhd}>
-                <td style={{ color: '#cbd5e1', fontSize: 11, paddingLeft: 16 }}>{i + 1}</td>
-                <td>
-                  <span style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd}</span>
-                  {' '}<ExchPill exch={r.exch} />
-                </td>
-                <td style={{ fontSize: 12, color: '#4a5568', maxWidth: 200 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                </td>
-                <td className="num" style={{ fontSize: 12, fontWeight: 600 }}>{fmtCcy(r.value)}</td>
-                <td className="num" style={{ fontSize: 12 }}>
-                  <span style={{ color: '#a0aec0' }}>{fmt(r.weight, 1)}%</span>
-                </td>
-                <td className="num" style={{ fontSize: 12 }}>
-                  {r.close != null ? fmt(r.close) : <span style={{ color: '#cbd5e1' }}>—</span>}
-                </td>
-                <td className="num">
-                  {r.ok ? (
-                    <span style={{ fontWeight: 700, fontSize: 13 }}
-                      className={r.pct > 0 ? 'green' : r.pct < 0 ? 'red' : 'grey'}>
-                      {r.pct > 0 ? '+' : ''}{fmt(r.pct)}%
-                    </span>
-                  ) : (
-                    <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {sorted.map((r, i) => {
+              const pctNum = parseFloat(r.pct)
+              const pctOk  = r.ok && isFinite(pctNum)
+              return (
+                <tr key={r.eodhd}>
+                  <td style={{ color: '#cbd5e1', fontSize: 11, paddingLeft: 16 }}>{i + 1}</td>
+                  <td>
+                    <span style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd}</span>
+                    {' '}<ExchPill exch={r.exch} />
+                  </td>
+                  <td style={{ fontSize: 12, color: '#4a5568', maxWidth: 200 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                  </td>
+                  <td className="num" style={{ fontSize: 12, fontWeight: 600 }}>{fmtCcy(r.value)}</td>
+                  <td className="num" style={{ fontSize: 12 }}>
+                    <span style={{ color: '#a0aec0' }}>{fmt(r.weight, 1)}%</span>
+                  </td>
+                  <td className="num" style={{ fontSize: 12 }}>
+                    {isFinite(parseFloat(r.close)) ? fmt(r.close) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  <td className="num">
+                    {pctOk ? (
+                      <span style={{ fontWeight: 700, fontSize: 13 }}
+                        className={pctNum > 0 ? 'green' : pctNum < 0 ? 'red' : 'grey'}>
+                        {pctNum > 0 ? '+' : ''}{fmt(pctNum)}%
+                      </span>
+                    ) : (
+                      <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
