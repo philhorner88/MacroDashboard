@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import ExchPill from './ExchPill'
 import { fmtCcy, fmt } from '../utils'
 import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
-
-const STORAGE_KEY = 'deleted_tickers'
 
 const COLS = [
   { key: 'eodhd',  label: 'Ticker',   num: false },
@@ -36,24 +34,12 @@ function safeSort(a, b, col, dir) {
   } catch { return 0 }
 }
 
-export default function HoldingsTab({ prices, loading }) {
+export default function HoldingsTab({ prices, loading, deleted, deleteTicker, restoreTicker, restoreAll }) {
   const [sortCol,    setSortCol]    = useState('value')
   const [sortDir,    setSortDir]    = useState('desc')
   const [filter,     setFilter]     = useState('')
   const [exchFilter, setExchFilter] = useState('All')
-  const [deleted,    setDeleted]    = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')) }
-    catch { return new Set() }
-  })
   const [showDeleted, setShowDeleted] = useState(false)
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...deleted]))
-  }, [deleted])
-
-  const deleteTicker  = (t) => setDeleted(prev => new Set([...prev, t]))
-  const restoreTicker = (t) => setDeleted(prev => { const s = new Set(prev); s.delete(t); return s })
-  const restoreAll    = ()  => setDeleted(new Set())
 
   const rows = PORTFOLIO.map(h => ({
     ...h,
