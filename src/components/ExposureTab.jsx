@@ -65,7 +65,7 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct }) 
   )
 }
 
-export default function ExposureTab() {
+export default function ExposureTab({ deleted }) {
   const [sortCol, setSortCol] = useState('value')
   const [sortDir, setSortDir] = useState('desc')
 
@@ -79,19 +79,23 @@ export default function ExposureTab() {
     return <span style={{ color: '#3182ce' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
+  // Filter out deleted tickers
+  const activePortfolio = PORTFOLIO.filter(h => !deleted.has(h.eodhd))
+  const activeTotalValue = activePortfolio.reduce((s, h) => s + h.value, 0)
+
   // Sort by value descending for pie; top 14 get individual slices, rest = "Others"
-  const byValue = [...PORTFOLIO].sort((a, b) => b.value - a.value)
+  const byValue = [...activePortfolio].sort((a, b) => b.value - a.value)
   const top     = byValue.slice(0, 14)
   const rest    = byValue.slice(14)
   const othersValue = rest.reduce((s, r) => s + r.value, 0)
 
   const pieData = [
-    ...top.map(r => ({ name: r.name, code: r.eodhd, value: r.value, pct: (r.value / TOTAL_PORTFOLIO) * 100 })),
-    ...(othersValue > 0 ? [{ name: `Others (${rest.length})`, code: '', value: othersValue, pct: (othersValue / TOTAL_PORTFOLIO) * 100 }] : []),
+    ...top.map(r => ({ name: r.name, code: r.eodhd, value: r.value, pct: (r.value / (activeTotalValue || 1)) * 100 })),
+    ...(othersValue > 0 ? [{ name: `Others (${rest.length})`, code: '', value: othersValue, pct: (othersValue / (activeTotalValue || 1)) * 100 }] : []),
   ]
 
-  // Sortable table data
-  const tableData = PORTFOLIO.map(r => ({ ...r, pct: (r.value / TOTAL_PORTFOLIO) * 100 }))
+  // Sortable table data (active only)
+  const tableData = activePortfolio.map(r => ({ ...r, pct: (r.value / (activeTotalValue || 1)) * 100 }))
   const sorted = [...tableData].sort((a, b) => safeSort(a, b, sortCol, sortDir))
 
   return (
@@ -100,8 +104,8 @@ export default function ExposureTab() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
         {[
           { label: 'Total Portfolio', value: fmtCcy(TOTAL_PORTFOLIO), bg: '#ebf8ff', border: '#bee3f8' },
-          { label: 'Direct Holdings', value: PORTFOLIO.length, bg: '#f0fff4', border: '#c6f6d5' },
-          { label: 'Largest Holding', value: `${fmt(byValue[0]?.pct, 1)}%`, sub: byValue[0]?.name, bg: '#fffaf0', border: '#fbd38d' },
+          { label: 'Active Holdings', value: activePortfolio.length, bg: '#f0fff4', border: '#c6f6d5' },
+          { label: 'Largest Holding', value: `${fmt(byValue[0] ? (byValue[0].value / (activeTotalValue || 1)) * 100 : 0, 1)}%`, sub: byValue[0]?.name, bg: '#fffaf0', border: '#fbd38d' },
         ].map(k => (
           <div key={k.label} className="card" style={{ background: k.bg, border: `1px solid ${k.border}`, padding: '14px 18px' }}>
             <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{k.label}</div>
@@ -171,7 +175,7 @@ export default function ExposureTab() {
                         width: 40, height: 6, borderRadius: 3, background: '#edf2f7', overflow: 'hidden'
                       }}>
                         <div style={{
-                          width: `${Math.min(100, (r.value / byValue[0].value) * 100)}%`,
+                          width: `${Math.min(100, byValue[0] ? (r.value / byValue[0].value) * 100 : 0)}%`,
                           height: '100%', background: COLORS[i % COLORS.length], borderRadius: 3
                         }} />
                       </div>
