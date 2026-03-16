@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import ExchPill from './ExchPill'
 import { fmtCcy, fmt } from '../utils'
 import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
@@ -7,6 +8,9 @@ const REGIONS = [
   { key: 'US', label: '🇺🇸 US',     color: '#f0fff4', border: '#c6f6d5', text: '#276749' },
   { key: 'EU', label: '🇪🇺 Europe', color: '#fffaf0', border: '#fbd38d', text: '#744210' },
 ]
+
+const EXCH_FILTERS = ['All', 'AU', 'US', 'EU']
+const DEFAULT_ROWS = 8
 
 function MoverRow({ h, rank }) {
   const pctNum = parseFloat(h.pct)
@@ -32,6 +36,10 @@ function MoverRow({ h, rank }) {
 }
 
 export default function OverviewTab({ prices, loading }) {
+  const [exchFilter, setExchFilter] = useState('All')
+  const [expandGainers, setExpandGainers] = useState(false)
+  const [expandLosers, setExpandLosers] = useState(false)
+
   const enriched = PORTFOLIO.map(h => ({
     ...h,
     ...(prices[h.eodhd] || {}),
@@ -59,8 +67,23 @@ export default function OverviewTab({ prices, loading }) {
     return { ...reg, count: holdings.length, value: totalVal, avgPct, loaded: withP.length }
   })
 
-  const gainers = [...withPrices].sort((a, b) => b.pctNum - a.pctNum).slice(0, 8)
-  const losers  = [...withPrices].sort((a, b) => a.pctNum - b.pctNum).slice(0, 8)
+  // Apply exchange filter to gainers/losers
+  const filtered = exchFilter === 'All'
+    ? withPrices
+    : withPrices.filter(h => h.exch === exchFilter)
+
+  const allGainers = [...filtered].sort((a, b) => b.pctNum - a.pctNum).filter(h => h.pctNum >= 0)
+  const allLosers  = [...filtered].sort((a, b) => a.pctNum - b.pctNum).filter(h => h.pctNum < 0)
+
+  const gainers = expandGainers ? allGainers : allGainers.slice(0, DEFAULT_ROWS)
+  const losers  = expandLosers  ? allLosers  : allLosers.slice(0, DEFAULT_ROWS)
+
+  const filterBtnStyle = (active) => ({
+    padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+    border: active ? 'none' : '1px solid #e2e8f0',
+    background: active ? '#3182ce' : '#fff',
+    color: active ? '#fff' : '#4a5568', cursor: 'pointer',
+  })
 
   return (
     <>
@@ -150,10 +173,27 @@ export default function OverviewTab({ prices, loading }) {
         </div>
       )}
 
+      {/* Exchange filter pills */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#718096', marginRight: 4 }}>Filter:</span>
+        {EXCH_FILTERS.map(ex => (
+          <button key={ex} onClick={() => { setExchFilter(ex); setExpandGainers(false); setExpandLosers(false) }}
+            style={filterBtnStyle(exchFilter === ex)}>
+            {ex === 'All' ? 'All' : ex === 'AU' ? '🇦🇺 ASX' : ex === 'US' ? '🇺🇸 US' : '🇪🇺 EU'}
+          </button>
+        ))}
+        <span style={{ fontSize: 11, color: '#a0aec0', marginLeft: 8 }}>
+          {filtered.length} holdings
+        </span>
+      </div>
+
       {/* Gainers / Losers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169', marginBottom: 12 }}>▲ Top Gainers</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169' }}>▲ Top Gainers</div>
+            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allGainers.length} stocks</span>
+          </div>
           <table>
             <thead><tr>
               <th>#</th><th>Holding</th>
@@ -161,14 +201,28 @@ export default function OverviewTab({ prices, loading }) {
             </tr></thead>
             <tbody>
               {gainers.length === 0
-                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>Waiting for prices…</td></tr>
+                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>
+                    {filtered.length === 0 ? 'No holdings in this region' : 'No gainers today'}
+                  </td></tr>
                 : gainers.map((h, i) => <MoverRow key={h.eodhd} h={h} rank={i + 1} />)
               }
             </tbody>
           </table>
+          {allGainers.length > DEFAULT_ROWS && (
+            <button onClick={() => setExpandGainers(v => !v)} style={{
+              width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
+              borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
+              color: '#3182ce', cursor: 'pointer',
+            }}>
+              {expandGainers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allGainers.length} gainers`}
+            </button>
+          )}
         </div>
         <div className="card">
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#e53e3e', marginBottom: 12 }}>▼ Top Losers</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#e53e3e' }}>▼ Top Losers</div>
+            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allLosers.length} stocks</span>
+          </div>
           <table>
             <thead><tr>
               <th>#</th><th>Holding</th>
@@ -176,11 +230,22 @@ export default function OverviewTab({ prices, loading }) {
             </tr></thead>
             <tbody>
               {losers.length === 0
-                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>Waiting for prices…</td></tr>
+                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>
+                    {filtered.length === 0 ? 'No holdings in this region' : 'No losers today'}
+                  </td></tr>
                 : losers.map((h, i) => <MoverRow key={h.eodhd} h={h} rank={i + 1} />)
               }
             </tbody>
           </table>
+          {allLosers.length > DEFAULT_ROWS && (
+            <button onClick={() => setExpandLosers(v => !v)} style={{
+              width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
+              borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
+              color: '#3182ce', cursor: 'pointer',
+            }}>
+              {expandLosers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allLosers.length} losers`}
+            </button>
+          )}
         </div>
       </div>
     </>
