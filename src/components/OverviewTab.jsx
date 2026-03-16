@@ -12,6 +12,24 @@ const REGIONS = [
 const EXCH_FILTERS = ['All', 'AU', 'US', 'EU']
 const DEFAULT_ROWS = 8
 
+const SORT_COLS = ['close', 'pct', 'value']
+
+function safeSort(a, b, col, dir) {
+  const an = parseFloat(a[col])
+  const bn = parseFloat(b[col])
+  const aOk = isFinite(an)
+  const bOk = isFinite(bn)
+  if (!aOk && !bOk) return 0
+  if (!aOk) return 1
+  if (!bOk) return -1
+  return dir === 'asc' ? an - bn : bn - an
+}
+
+function SortIcon({ col, sortCol, sortDir }) {
+  if (sortCol !== col) return <span style={{ color: '#cbd5e1', marginLeft: 3 }}>⇅</span>
+  return <span style={{ color: '#3182ce', marginLeft: 3 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+}
+
 function MoverRow({ h, rank }) {
   const pctNum = parseFloat(h.pct)
   return (
@@ -35,12 +53,28 @@ function MoverRow({ h, rank }) {
   )
 }
 
-export default function OverviewTab({ prices, loading }) {
+export default function OverviewTab({ prices, loading, deleted }) {
   const [exchFilter, setExchFilter] = useState('All')
   const [expandGainers, setExpandGainers] = useState(false)
   const [expandLosers, setExpandLosers] = useState(false)
+  const [gainerSortCol, setGainerSortCol] = useState('pct')
+  const [gainerSortDir, setGainerSortDir] = useState('desc')
+  const [loserSortCol, setLoserSortCol] = useState('pct')
+  const [loserSortDir, setLoserSortDir] = useState('asc')
 
-  const enriched = PORTFOLIO.map(h => ({
+  const toggleGainerSort = (col) => {
+    if (gainerSortCol === col) setGainerSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setGainerSortCol(col); setGainerSortDir(col === 'pct' ? 'desc' : 'desc') }
+  }
+  const toggleLoserSort = (col) => {
+    if (loserSortCol === col) setLoserSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setLoserSortCol(col); setLoserSortDir(col === 'pct' ? 'asc' : 'desc') }
+  }
+
+  // Filter out deleted tickers first
+  const activePortfolio = PORTFOLIO.filter(h => !deleted.has(h.eodhd))
+
+  const enriched = activePortfolio.map(h => ({
     ...h,
     ...(prices[h.eodhd] || {}),
     pctNum: parseFloat((prices[h.eodhd] || {}).pct),
@@ -48,15 +82,16 @@ export default function OverviewTab({ prices, loading }) {
 
   const withPrices = enriched.filter(h => h.ok && isFinite(h.pctNum))
 
-  // Portfolio-level stats
+  // Portfolio-level stats (use active portfolio total for weight calc)
+  const activeTotalValue = activePortfolio.reduce((s, h) => s + h.value, 0)
   const avgMove = withPrices.length
-    ? withPrices.reduce((s, h) => s + h.pctNum * (h.value / TOTAL_PORTFOLIO), 0)
+    ? withPrices.reduce((s, h) => s + h.pctNum * (h.value / (activeTotalValue || 1)), 0)
     : null
   const topGainer = [...withPrices].sort((a, b) => b.pctNum - a.pctNum)[0]
   const topLoser  = [...withPrices].sort((a, b) => a.pctNum - b.pctNum)[0]
   const notable   = withPrices.filter(h => Math.abs(h.pctNum) >= 5)
 
-  // Regional breakdown
+  // Regional breakdown (active only)
   const regionData = REGIONS.map(reg => {
     const holdings = enriched.filter(h => h.exch === reg.key)
     const totalVal = holdings.reduce((s, h) => s + h.value, 0)
@@ -72,11 +107,16 @@ export default function OverviewTab({ prices, loading }) {
     ? withPrices
     : withPrices.filter(h => h.exch === exchFilter)
 
-  const allGainers = [...filtered].sort((a, b) => b.pctNum - a.pctNum).filter(h => h.pctNum >= 0)
-  const allLosers  = [...filtered].sort((a, b) => a.pctNum - b.pctNum).filter(h => h.pctNum < 0)
+  // Sort and split gainers/losers
+  const allGainersSorted = [...filtered]
+    .filter(h => h.pctNum >= 0)
+    .sort((a, b) => safeSort(a, b, gainerSortCol, gainerSortDir))
+  const allLosersSorted = [...filtered]
+    .filter(h => h.pctNum < 0)
+    .sort((a, b) => safeSort(a, b, loserSortCol, loserSortDir))
 
-  const gainers = expandGainers ? allGainers : allGainers.slice(0, DEFAULT_ROWS)
-  const losers  = expandLosers  ? allLosers  : allLosers.slice(0, DEFAULT_ROWS)
+  const gainers = expandGainers ? allGainersSorted : allGainersSorted.slice(0, DEFAULT_ROWS)
+  const losers  = expandLosers  ? allLosersSorted  : allLosersSorted.slice(0, DEFAULT_ROWS)
 
   const filterBtnStyle = (active) => ({
     padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -101,7 +141,7 @@ export default function OverviewTab({ prices, loading }) {
             {avgMove == null ? '—' : `${avgMove >= 0 ? '+' : ''}${fmt(avgMove)}%`}
           </div>
           <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>
-            {loading ? 'loading…' : `${withPrices.length} of ${PORTFOLIO.length} prices loaded`}
+            {loading ? 'loading…' : `${withPrices.length} of ${activePortfolio.length} prices loaded`}
           </div>
         </div>
         <div className="card" style={{ background: '#fffaf0', border: '1px solid #fbd38d', padding: '14px 18px' }}>
@@ -192,12 +232,20 @@ export default function OverviewTab({ prices, loading }) {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169' }}>▲ Top Gainers</div>
-            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allGainers.length} stocks</span>
+            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allGainersSorted.length} stocks</span>
           </div>
           <table>
             <thead><tr>
               <th>#</th><th>Holding</th>
-              <th className="num">Close</th><th className="num">Change</th><th className="num">Value</th>
+              <th className="num" onClick={() => toggleGainerSort('close')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Close <SortIcon col="close" sortCol={gainerSortCol} sortDir={gainerSortDir} />
+              </th>
+              <th className="num" onClick={() => toggleGainerSort('pct')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Change <SortIcon col="pct" sortCol={gainerSortCol} sortDir={gainerSortDir} />
+              </th>
+              <th className="num" onClick={() => toggleGainerSort('value')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Value <SortIcon col="value" sortCol={gainerSortCol} sortDir={gainerSortDir} />
+              </th>
             </tr></thead>
             <tbody>
               {gainers.length === 0
@@ -208,25 +256,33 @@ export default function OverviewTab({ prices, loading }) {
               }
             </tbody>
           </table>
-          {allGainers.length > DEFAULT_ROWS && (
+          {allGainersSorted.length > DEFAULT_ROWS && (
             <button onClick={() => setExpandGainers(v => !v)} style={{
               width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
               borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
               color: '#3182ce', cursor: 'pointer',
             }}>
-              {expandGainers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allGainers.length} gainers`}
+              {expandGainers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allGainersSorted.length} gainers`}
             </button>
           )}
         </div>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#e53e3e' }}>▼ Top Losers</div>
-            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allLosers.length} stocks</span>
+            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allLosersSorted.length} stocks</span>
           </div>
           <table>
             <thead><tr>
               <th>#</th><th>Holding</th>
-              <th className="num">Close</th><th className="num">Change</th><th className="num">Value</th>
+              <th className="num" onClick={() => toggleLoserSort('close')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Close <SortIcon col="close" sortCol={loserSortCol} sortDir={loserSortDir} />
+              </th>
+              <th className="num" onClick={() => toggleLoserSort('pct')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Change <SortIcon col="pct" sortCol={loserSortCol} sortDir={loserSortDir} />
+              </th>
+              <th className="num" onClick={() => toggleLoserSort('value')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Value <SortIcon col="value" sortCol={loserSortCol} sortDir={loserSortDir} />
+              </th>
             </tr></thead>
             <tbody>
               {losers.length === 0
@@ -237,13 +293,13 @@ export default function OverviewTab({ prices, loading }) {
               }
             </tbody>
           </table>
-          {allLosers.length > DEFAULT_ROWS && (
+          {allLosersSorted.length > DEFAULT_ROWS && (
             <button onClick={() => setExpandLosers(v => !v)} style={{
               width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
               borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
               color: '#3182ce', cursor: 'pointer',
             }}>
-              {expandLosers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allLosers.length} losers`}
+              {expandLosers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allLosersSorted.length} losers`}
             </button>
           )}
         </div>
