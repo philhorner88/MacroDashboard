@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import ExchPill from './ExchPill'
 import { fmtCcy, fmt } from '../utils'
@@ -8,6 +9,29 @@ const COLORS = [
   '#dd6b20','#319795','#d53f8c','#2b6cb0','#276749',
   '#744210','#9b2335','#553c9a','#c05621','#285e61',
 ]
+
+const COLS = [
+  { key: 'eodhd', label: 'Ticker', num: false },
+  { key: 'name',  label: 'Name',   num: false },
+  { key: 'value', label: 'Value',  num: true },
+  { key: 'pct',   label: 'Weight', num: true },
+]
+
+const STRING_COLS = new Set(['eodhd', 'name'])
+
+function safeSort(a, b, col, dir) {
+  const av = a[col], bv = b[col]
+  if (STRING_COLS.has(col)) {
+    const as = String(av ?? ''), bs = String(bv ?? '')
+    return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+  }
+  const an = parseFloat(av), bn = parseFloat(bv)
+  const aOk = isFinite(an), bOk = isFinite(bn)
+  if (!aOk && !bOk) return 0
+  if (!aOk) return 1
+  if (!bOk) return -1
+  return dir === 'asc' ? an - bn : bn - an
+}
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null
@@ -42,16 +66,33 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct }) 
 }
 
 export default function ExposureTab() {
-  // Sort by value descending; top 14 get individual slices, rest = "Others"
-  const sorted = [...PORTFOLIO].sort((a, b) => b.value - a.value)
-  const top    = sorted.slice(0, 14)
-  const rest   = sorted.slice(14)
+  const [sortCol, setSortCol] = useState('value')
+  const [sortDir, setSortDir] = useState('desc')
+
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('desc') }
+  }
+
+  const SortIcon = ({ col }) => {
+    if (sortCol !== col) return <span style={{ color: '#cbd5e1' }}>⇅</span>
+    return <span style={{ color: '#3182ce' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
+  // Sort by value descending for pie; top 14 get individual slices, rest = "Others"
+  const byValue = [...PORTFOLIO].sort((a, b) => b.value - a.value)
+  const top     = byValue.slice(0, 14)
+  const rest    = byValue.slice(14)
   const othersValue = rest.reduce((s, r) => s + r.value, 0)
 
   const pieData = [
     ...top.map(r => ({ name: r.name, code: r.eodhd, value: r.value, pct: (r.value / TOTAL_PORTFOLIO) * 100 })),
     ...(othersValue > 0 ? [{ name: `Others (${rest.length})`, code: '', value: othersValue, pct: (othersValue / TOTAL_PORTFOLIO) * 100 }] : []),
   ]
+
+  // Sortable table data
+  const tableData = PORTFOLIO.map(r => ({ ...r, pct: (r.value / TOTAL_PORTFOLIO) * 100 }))
+  const sorted = [...tableData].sort((a, b) => safeSort(a, b, sortCol, sortDir))
 
   return (
     <>
@@ -60,7 +101,7 @@ export default function ExposureTab() {
         {[
           { label: 'Total Portfolio', value: fmtCcy(TOTAL_PORTFOLIO), bg: '#ebf8ff', border: '#bee3f8' },
           { label: 'Direct Holdings', value: PORTFOLIO.length, bg: '#f0fff4', border: '#c6f6d5' },
-          { label: 'Largest Holding', value: `${fmt(sorted[0]?.pct, 1)}%`, sub: sorted[0]?.name, bg: '#fffaf0', border: '#fbd38d' },
+          { label: 'Largest Holding', value: `${fmt(byValue[0]?.pct, 1)}%`, sub: byValue[0]?.name, bg: '#fffaf0', border: '#fbd38d' },
         ].map(k => (
           <div key={k.label} className="card" style={{ background: k.bg, border: `1px solid ${k.border}`, padding: '14px 18px' }}>
             <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{k.label}</div>
@@ -98,16 +139,19 @@ export default function ExposureTab() {
           </ResponsiveContainer>
         </div>
 
-        {/* Top 20 table */}
+        {/* Sortable table */}
         <div className="card" style={{ overflowY: 'auto', maxHeight: 440 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#4a5568', marginBottom: 12 }}>All Holdings by Weight</div>
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th>Holding</th>
-                <th className="num">Value</th>
-                <th className="num">Weight</th>
+                {COLS.map(c => (
+                  <th key={c.key} className={c.num ? 'num' : ''} onClick={() => toggleSort(c.key)}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    {c.label} <SortIcon col={c.key} />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -116,21 +160,23 @@ export default function ExposureTab() {
                   <td style={{ color: '#cbd5e1', fontSize: 11 }}>{i + 1}</td>
                   <td>
                     <div style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd} <ExchPill exch={r.exch} /></div>
-                    <div style={{ fontSize: 10, color: '#a0aec0' }}>{r.name}</div>
                   </td>
-                  <td className="num" style={{ fontSize: 12 }}>{fmtCcy(r.value)}</td>
+                  <td style={{ fontSize: 12, color: '#4a5568', maxWidth: 200 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                  </td>
+                  <td className="num" style={{ fontSize: 12, fontWeight: 600 }}>{fmtCcy(r.value)}</td>
                   <td className="num">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                       <div style={{
                         width: 40, height: 6, borderRadius: 3, background: '#edf2f7', overflow: 'hidden'
                       }}>
                         <div style={{
-                          width: `${Math.min(100, (r.value / sorted[0].value) * 100)}%`,
+                          width: `${Math.min(100, (r.value / byValue[0].value) * 100)}%`,
                           height: '100%', background: COLORS[i % COLORS.length], borderRadius: 3
                         }} />
                       </div>
                       <span style={{ fontSize: 11, color: '#4a5568', fontWeight: 600 }}>
-                        {fmt((r.value / TOTAL_PORTFOLIO) * 100, 1)}%
+                        {fmt(r.pct, 1)}%
                       </span>
                     </div>
                   </td>
