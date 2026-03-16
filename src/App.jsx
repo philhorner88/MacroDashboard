@@ -15,6 +15,8 @@ const TABS = [
   { id: 'performance', label: '📈  Performance' },
 ]
 
+const STORAGE_KEY = 'deleted_tickers'
+
 const TODAY = new Date().toLocaleDateString('en-AU', {
   weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
 })
@@ -24,6 +26,18 @@ export default function App() {
   const [prices,    setPrices]    = useState({})
   const [loading,   setLoading]   = useState(true)
   const [lastFetch, setLastFetch] = useState(null)
+  const [deleted,   setDeleted]   = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')) }
+    catch { return new Set() }
+  })
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...deleted]))
+  }, [deleted])
+
+  const deleteTicker  = (t) => setDeleted(prev => new Set([...prev, t]))
+  const restoreTicker = (t) => setDeleted(prev => { const s = new Set(prev); s.delete(t); return s })
+  const restoreAll    = ()  => setDeleted(new Set())
 
   const loadPrices = useCallback(async () => {
     setLoading(true)
@@ -43,6 +57,8 @@ export default function App() {
 
   const loaded = Object.values(prices).filter(p => p?.ok).length
   const total  = PORTFOLIO.length
+
+  const deletedProps = { deleted, deleteTicker, restoreTicker, restoreAll }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f4f8', fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
@@ -103,9 +119,9 @@ export default function App() {
 
       {/* Body */}
       <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
-        {tab === 'overview'    && <OverviewTab    prices={prices} loading={loading} />}
-        {tab === 'exposure'    && <ExposureTab />}
-        {tab === 'holdings'    && <HoldingsTab    prices={prices} loading={loading} />}
+        {tab === 'overview'    && <OverviewTab    prices={prices} loading={loading} deleted={deleted} />}
+        {tab === 'exposure'    && <ExposureTab    deleted={deleted} />}
+        {tab === 'holdings'    && <HoldingsTab    prices={prices} loading={loading} {...deletedProps} />}
         {tab === 'news'        && <NewsTab />}
         {tab === 'performance' && <PerformanceTab prices={prices} />}
       </div>
