@@ -4,6 +4,7 @@ import ExposureTab    from './components/ExposureTab'
 import HoldingsTab    from './components/HoldingsTab'
 import NewsTab        from './components/NewsTab'
 import PerformanceTab from './components/PerformanceTab'
+import SessionWrapTab from './components/SessionWrapTab'
 import { PORTFOLIO }  from './data/portfolio'
 import { fetchAllPrices } from './data/api'
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'holdings',    label: '📋  Holdings'    },
   { id: 'news',        label: '📰  News'        },
   { id: 'performance', label: '📈  Performance' },
+  { id: 'wrap',        label: '🇺🇸  Session Wrap' },
 ]
 
 const STORAGE_KEY = 'deleted_tickers'
@@ -124,6 +126,7 @@ export default function App() {
         {tab === 'holdings'    && <HoldingsTab    prices={prices} loading={loading} {...deletedProps} />}
         {tab === 'news'        && <NewsTab />}
         {tab === 'performance' && <PerformanceTab prices={prices} />}
+        {tab === 'wrap'        && <SessionWrapTab prices={prices} loading={loading} deleted={deleted} />}
       </div>
 
       <div style={{
