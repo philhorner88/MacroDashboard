@@ -169,19 +169,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Demo notice */}
-        {isDefault && (
-          <div className="px-6 py-2 bg-primary/5 border-t border-primary/15 flex items-center justify-between gap-4">
-            <p className="text-xs text-on-surface-variant">
-              <span className="text-primary font-bold">Demo portfolio.</span>{' '}
-              Import your real ShareSight Exposure Report to see your live data.
-            </p>
-            <button onClick={() => setShowImport(true)} className="text-xs font-bold text-primary hover:underline flex-shrink-0 flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">upload_file</span>
-              Import now
-            </button>
-          </div>
-        )}
+
       </header>
 
       {/* ── Content ── */}
