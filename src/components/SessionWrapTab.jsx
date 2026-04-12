@@ -1,437 +1,248 @@
 import { useState, useEffect } from 'react'
-import { PORTFOLIO } from '../data/portfolio'
 import { fmtPct, fmt } from '../utils'
 
-// ── Sector map ───────────────────────────────────────────────────────────────
 const SECTOR_MAP = {
-  'GOOG.US':  'Internet & AI',    'GOOGL.US': 'Internet & AI',    'META.US':  'Internet & AI',
-  'MSFT.US':  'Software & Cloud', 'ADBE.US':  'Software & Cloud', 'MDB.US':   'Software & Cloud',
-  'NET.US':   'Software & Cloud',
-  'NVDA.US':  'Semiconductors',   'AMD.US':   'Semiconductors',   'TSM.US':   'Semiconductors',
-  'ASML.US':  'Semiconductors',
-  'AAPL.US':  'Consumer Tech',
-  'AMZN.US':  'E-Commerce',       'SHOP.US':  'E-Commerce',
-  'BKNG.US':  'Travel',           'EXPE.US':  'Travel',           'ABNB.US':  'Travel',
-  'LYV.US':   'Entertainment',    'DIS.US':   'Entertainment',
-  'NFLX.US':  'Streaming',        'SPOT.US':  'Streaming',
-  'V.US':     'Financials',       'MA.US':    'Financials',       'AXP.US':   'Financials',
-  'JPM.US':   'Financials',       'BAC.US':   'Financials',       'BLK.US':   'Financials',
-  'ICE.US':   'Financials',       'CB.US':    'Financials',
-  'SBUX.US':  'Consumer',         'NKE.US':   'Consumer',
-  'NVO.US':   'Healthcare',
-  'TLT.US':   'Fixed Income',     'BND.US':   'Fixed Income',     'IEI.US':   'Fixed Income',
-  'AGG.US':   'Fixed Income',     'VGSH.US':  'Fixed Income',
-  'EADSY.US': 'Intl ADRs',        'ADYEY.US': 'Intl ADRs',       'LVMUY.US': 'Intl ADRs',
-  'SMWB.US':  'Small Cap',        'U.US':     'Small Cap',        'XYZ.US':   'Small Cap',
+  'GOOG.US':'Internet & AI',   'GOOGL.US':'Internet & AI',  'META.US':'Internet & AI',
+  'MSFT.US':'Software & Cloud','ADBE.US':'Software & Cloud','MDB.US': 'Software & Cloud','NET.US':'Software & Cloud',
+  'NVDA.US':'Semiconductors',  'AMD.US': 'Semiconductors',  'TSM.US':'Semiconductors',  'ASML.US':'Semiconductors',
+  'AAPL.US':'Consumer Tech',
+  'AMZN.US':'E-Commerce',      'SHOP.US':'E-Commerce',
+  'BKNG.US':'Travel',          'EXPE.US':'Travel',          'ABNB.US':'Travel',
+  'LYV.US': 'Entertainment',   'DIS.US': 'Entertainment',
+  'NFLX.US':'Streaming',       'SPOT.US':'Streaming',
+  'V.US':'Financials','MA.US':'Financials','AXP.US':'Financials','JPM.US':'Financials',
+  'BAC.US':'Financials','BLK.US':'Financials','ICE.US':'Financials','CB.US':'Financials',
+  'SBUX.US':'Consumer','NKE.US':'Consumer',
+  'NVO.US':'Healthcare',
+  'TLT.US':'Fixed Income','BND.US':'Fixed Income','IEI.US':'Fixed Income','AGG.US':'Fixed Income','VGSH.US':'Fixed Income',
+  'EADSY.US':'Intl ADRs','ADYEY.US':'Intl ADRs','LVMUY.US':'Intl ADRs',
+  'SMWB.US':'Small Cap','U.US':'Small Cap','XYZ.US':'Small Cap',
 }
-
 const SECTOR_ORDER = [
-  'Internet & AI', 'Semiconductors', 'Software & Cloud', 'Consumer Tech',
-  'E-Commerce', 'Travel', 'Streaming', 'Entertainment',
-  'Financials', 'Consumer', 'Healthcare', 'Intl ADRs', 'Fixed Income', 'Small Cap',
+  'Internet & AI','Semiconductors','Software & Cloud','Consumer Tech',
+  'E-Commerce','Travel','Streaming','Entertainment',
+  'Financials','Consumer','Healthcare','Intl ADRs','Fixed Income','Small Cap',
 ]
-
-// Tickers to fetch news for — top US holdings by value
-const US_NEWS_TICKERS = PORTFOLIO
-  .filter(h => h.exch === 'US')
-  .sort((a, b) => b.value - a.value)
-  .slice(0, 10)
-  .map(h => h.eodhd)
-
-// Indices to show in the market overview bar
 const INDICES = [
-  { ticker: 'GSPC.INDX', label: 'S&P 500' },
-  { ticker: 'IXIC.INDX', label: 'Nasdaq'  },
-  { ticker: 'DJI.INDX',  label: 'Dow'     },
+  { ticker:'GSPC.INDX', label:'S&P 500' },
+  { ticker:'IXIC.INDX', label:'Nasdaq'  },
+  { ticker:'DJI.INDX',  label:'Dow'     },
 ]
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const pctColor  = v => v == null ? '#a0aec0' : v > 0 ? '#38a169' : v < 0 ? '#e53e3e' : '#718096'
-const rowBg     = (v, i) => {
-  if (v > 0) return i % 2 ? '#f0fff4' : '#f6fffa'
-  if (v < 0) return i % 2 ? '#fff5f5' : '#fffafa'
-  return i % 2 ? '#f7fafc' : '#fff'
+const pctColor = (v) => v == null ? 'text-on-surface-variant' : v > 0 ? 'text-secondary' : v < 0 ? 'text-error' : 'text-on-surface-variant'
+const pctBadge = (v) => v == null ? 'bg-outline-variant/20 text-on-surface-variant' : v > 0 ? 'bg-secondary/10 text-secondary' : v < 0 ? 'bg-error/10 text-error' : 'bg-outline-variant/20 text-on-surface-variant'
+
+function timeAgo(s) {
+  const d = Date.now() - new Date(s).getTime()
+  const h = Math.floor(d/3600000), dd = Math.floor(d/86400000)
+  return h < 24 ? `${h}h ago` : `${dd}d ago`
 }
 
-function timeAgo(dateStr) {
-  const diff  = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / 3600000)
-  const days  = Math.floor(diff / 86400000)
-  if (hours < 24) return `${hours}h ago`
-  return `${days}d ago`
-}
+export default function SessionWrapTab({ prices, loading, portfolio, deleted }) {
+  const [indices,      setIndices]      = useState({})
+  const [news,         setNews]         = useState([])
+  const [newsLoading,  setNewsLoading]  = useState(true)
 
-// ── Shared styles ────────────────────────────────────────────────────────────
-const card = { background: '#fff', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,.07)', padding: 20 }
-const TH   = {
-  padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700,
-  color: '#718096', borderBottom: '1px solid #e2e8f0',
-  textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap',
-}
-const TD   = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f7fafc' }
+  const usTickers = portfolio
+    .filter(h => h.exch === 'US')
+    .slice().sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+    .map(h => h.eodhd)
 
-// ── Subcomponents ────────────────────────────────────────────────────────────
-function PctBar({ pct, max }) {
-  if (pct == null || max === 0) return null
-  const w = Math.min(Math.abs(pct) / max * 100, 100)
-  return (
-    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-      <div style={{ width: `${w}%`, height: '100%', borderRadius: 3, background: pctColor(pct), opacity: .75 }} />
-    </div>
-  )
-}
-
-function IndexCard({ label, data }) {
-  const loading = !data
-  return (
-    <div style={{
-      flex: 1, padding: '14px 18px', borderRadius: 10,
-      background: loading ? '#f7fafc' : data.pct > 0 ? '#f0fff4' : data.pct < 0 ? '#fff5f5' : '#f7fafc',
-      border: `1px solid ${loading ? '#e2e8f0' : data.pct > 0 ? '#c6f6d5' : data.pct < 0 ? '#fed7d7' : '#e2e8f0'}`,
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#718096', marginBottom: 4 }}>{label}</div>
-      {loading
-        ? <div style={{ fontSize: 18, color: '#cbd5e0' }}>—</div>
-        : <>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#2d3748' }}>
-              {data.close != null ? data.close.toLocaleString('en-AU', { maximumFractionDigits: 2 }) : '—'}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: pctColor(data.pct), marginTop: 2 }}>
-              {fmtPct(data.pct)}
-            </div>
-          </>
-      }
-    </div>
-  )
-}
-
-function SentimentBadge({ sentiment }) {
-  if (!sentiment?.polarity) return null
-  const map = {
-    positive: ['#f0fff4', '#38a169', '↑ positive'],
-    negative: ['#fff5f5', '#e53e3e', '↓ negative'],
-    neutral:  ['#f7fafc', '#718096', '– neutral'],
-  }
-  const [bg, color, label] = map[sentiment.polarity] || map.neutral
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: bg, color }}>
-      {label}
-    </span>
-  )
-}
-
-// ── Main component ───────────────────────────────────────────────────────────
-export default function SessionWrapTab({ prices, loading, deleted }) {
-
-  const [indices,     setIndices]     = useState({})
-  const [news,        setNews]        = useState([])
-  const [newsLoading, setNewsLoading] = useState(true)
-
-  // Fetch index prices (S&P, Nasdaq, Dow)
   useEffect(() => {
-    const tickers = INDICES.map(i => i.ticker).join(',')
-    fetch(`/api/prices?t=${tickers}`)
-      .then(r => r.json())
-      .then(setIndices)
-      .catch(() => {})
+    fetch(`/api/prices?s=${INDICES.map(i => i.ticker).join(',')}`)
+      .then(r => r.json()).then(setIndices).catch(() => {})
   }, [])
 
-  // Fetch news for top US holdings
   useEffect(() => {
     setNewsLoading(true)
-    fetch(`/api/news?t=${US_NEWS_TICKERS.join(',')}`)
+    fetch(`/api/news?s=${usTickers.join(',')}`)
       .then(r => r.json())
-      .then(d => { setNews(Array.isArray(d) ? d.slice(0, 20) : []) })
-      .catch(() => setNews([]))
+      .then(d => setNews(Array.isArray(d) ? d.slice(0, 20) : []))
+      .catch(() => {})
       .finally(() => setNewsLoading(false))
   }, [])
 
-  // Build enriched US holdings rows
-  const rows = PORTFOLIO
+  const rows = portfolio
     .filter(h => h.exch === 'US' && !deleted.has(h.eodhd))
     .map(h => {
       const p = prices[h.eodhd] || {}
-      return {
-        ...h,
-        close:    p.close ?? null,
-        prev:     p.prev  ?? null,
-        pct:      p.pct   ?? null,
-        sector:   SECTOR_MAP[h.eodhd] ?? 'Other',
-      }
+      return { ...h, close: p.close ?? null, prev: p.prev ?? null, pct: p.pct ?? null, sector: SECTOR_MAP[h.eodhd] ?? 'Other' }
     })
 
-  const priced   = rows.filter(r => r.pct != null)
-  const unpriced = rows.filter(r => r.pct == null)
-  const sorted   = [...priced].sort((a, b) => b.pct - a.pct)
-  const gainers  = sorted.slice(0, 10)
-  const losers   = [...sorted].reverse().slice(0, 10)
-  const notable  = sorted.filter(r => Math.abs(r.pct) >= 5)
-  const maxPct   = priced.length ? Math.max(...priced.map(r => Math.abs(r.pct))) : 1
-  const avgMove  = priced.length ? priced.reduce((s, r) => s + r.pct, 0) / priced.length : null
+  const withPct  = rows.filter(r => r.pct != null)
+  const gainers  = [...withPct].sort((a,b) => parseFloat(b.pct)-parseFloat(a.pct)).slice(0,10)
+  const losers   = [...withPct].sort((a,b) => parseFloat(a.pct)-parseFloat(b.pct)).slice(0,10)
+  const notable  = withPct.filter(r => Math.abs(parseFloat(r.pct)) >= 5)
+  const avgMove  = withPct.length ? withPct.reduce((s,r) => s+parseFloat(r.pct),0)/withPct.length : null
 
-  // Sector aggregation
-  const sectorMap = {}
-  for (const r of priced) {
-    if (!sectorMap[r.sector]) sectorMap[r.sector] = []
-    sectorMap[r.sector].push(r)
-  }
-  const sectors = SECTOR_ORDER
-    .filter(s => sectorMap[s])
-    .map(s => ({
-      name:    s,
-      avg:     sectorMap[s].reduce((a, r) => a + r.pct, 0) / sectorMap[s].length,
-      tickers: sectorMap[s],
-    }))
+  const sectorData = SECTOR_ORDER.map(sector => {
+    const members = rows.filter(r => r.sector === sector && r.pct != null)
+    const avg     = members.length ? members.reduce((s,r) => s+parseFloat(r.pct),0)/members.length : null
+    return { sector, avg, members }
+  })
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+  const thCls = "py-3 px-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest"
 
-      {/* ── Header ── */}
-      <div style={{
-        ...card, padding: '18px 24px',
-        background: 'linear-gradient(135deg, #1a365d 0%, #2d3748 100%)',
-        color: '#fff',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>🇺🇸 US Session Wrap</div>
-            <div style={{ fontSize: 12, color: '#90cdf4', marginTop: 2 }}>
-              Wall Street Close · All prices via EODHD
-            </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            {loading
-              ? <span style={{ fontSize: 12, color: '#90cdf4' }}>⏳ Loading prices…</span>
-              : <>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: avgMove > 0 ? '#68d391' : avgMove < 0 ? '#fc8181' : '#cbd5e0' }}>
-                    {fmtPct(avgMove)}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#90cdf4' }}>
-                    Avg move · {priced.length}/{rows.length} US prices
-                  </div>
-                </>
-            }
-          </div>
-        </div>
-
-        {/* Index bar */}
-        <div style={{ display: 'flex', gap: 12 }}>
-          {INDICES.map(({ ticker, label }) => (
-            <IndexCard key={ticker} label={label} data={indices[ticker] || null} />
+  const MoverTable = ({ items, isGainer }) => (
+    <div className="bg-surface-container-low overflow-hidden rounded-lg">
+      <table className="w-full text-left">
+        <thead className="bg-surface-container-high/50">
+          <tr>
+            <th className={thCls}>Ticker</th>
+            <th className={`${thCls} text-right`}>Close</th>
+            <th className={`${thCls} text-right`}>Prev</th>
+            <th className={`${thCls} text-right`}>Chg%</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-outline-variant/10">
+          {items.map((h, i) => (
+            <tr key={h.eodhd} className={`hover:bg-surface-container transition-colors ${i%2===1?'bg-surface-container/20':''}`}>
+              <td className="py-3 px-4">
+                <div className="font-bold text-sm">{h.eodhd.split('.')[0]}</div>
+                <div className="text-xs text-on-surface-variant truncate max-w-[140px]">{h.name}</div>
+              </td>
+              <td className="py-3 px-4 text-right tabular text-sm font-medium">{h.close != null ? fmt(h.close) : '—'}</td>
+              <td className="py-3 px-4 text-right tabular text-sm text-on-surface-variant">{h.prev != null ? fmt(h.prev) : '—'}</td>
+              <td className={`py-3 px-4 text-right tabular text-sm font-bold ${isGainer ? 'text-secondary' : 'text-error'}`}>
+                {fmtPct(parseFloat(h.pct))}
+              </td>
+            </tr>
           ))}
-        </div>
-      </div>
+          {items.length === 0 && (
+            <tr><td colSpan={4} className="py-8 text-center text-sm text-on-surface-variant">No data today</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
 
-      {/* ── Gainers / Losers ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-        {/* Gainers */}
-        <div style={card}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#38a169', marginBottom: 14 }}>📈 Top 10 Gainers</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>
-              <th style={{ ...TH, width: 24 }}>#</th>
-              <th style={TH}>Ticker</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Close</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Prev</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Chg %</th>
-            </tr></thead>
-            <tbody>
-              {gainers.length === 0
-                ? <tr><td colSpan={5} style={{ ...TD, textAlign: 'center', color: '#a0aec0', padding: 20 }}>No data</td></tr>
-                : gainers.map((r, i) => (
-                  <tr key={r.eodhd} style={{ background: i % 2 ? '#f0fff4' : '#fff' }}>
-                    <td style={{ ...TD, color: '#a0aec0', fontSize: 11 }}>{i + 1}</td>
-                    <td style={TD}>
-                      <div style={{ fontWeight: 700 }}>{r.eodhd.replace('.US', '')}</div>
-                      <div style={{ fontSize: 11, color: '#718096' }}>{r.name}</div>
-                    </td>
-                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>{r.close != null ? fmt(r.close) : '—'}</td>
-                    <td style={{ ...TD, textAlign: 'right', color: '#718096' }}>{r.prev != null ? fmt(r.prev) : '—'}</td>
-                    <td style={{ ...TD, textAlign: 'right', fontWeight: 700, color: '#38a169' }}>{fmtPct(r.pct)}</td>
-                  </tr>
-                ))
-              }
-            </tbody>
-          </table>
-        </div>
-
-        {/* Losers */}
-        <div style={card}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#e53e3e', marginBottom: 14 }}>📉 Top 10 Losers</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>
-              <th style={{ ...TH, width: 24 }}>#</th>
-              <th style={TH}>Ticker</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Close</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Prev</th>
-              <th style={{ ...TH, textAlign: 'right' }}>Chg %</th>
-            </tr></thead>
-            <tbody>
-              {losers.length === 0
-                ? <tr><td colSpan={5} style={{ ...TD, textAlign: 'center', color: '#a0aec0', padding: 20 }}>No data</td></tr>
-                : losers.map((r, i) => (
-                  <tr key={r.eodhd} style={{ background: i % 2 ? '#fff5f5' : '#fff' }}>
-                    <td style={{ ...TD, color: '#a0aec0', fontSize: 11 }}>{i + 1}</td>
-                    <td style={TD}>
-                      <div style={{ fontWeight: 700 }}>{r.eodhd.replace('.US', '')}</div>
-                      <div style={{ fontSize: 11, color: '#718096' }}>{r.name}</div>
-                    </td>
-                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>{r.close != null ? fmt(r.close) : '—'}</td>
-                    <td style={{ ...TD, textAlign: 'right', color: '#718096' }}>{r.prev != null ? fmt(r.prev) : '—'}</td>
-                    <td style={{ ...TD, textAlign: 'right', fontWeight: 700, color: '#e53e3e' }}>{fmtPct(r.pct)}</td>
-                  </tr>
-                ))
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Notable Moves ── */}
-      <div style={{ ...card, borderLeft: `4px solid ${notable.length ? '#f6ad55' : '#e2e8f0'}` }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: notable.length ? '#c05621' : '#a0aec0', marginBottom: notable.length ? 12 : 0 }}>
-          ⚡ Notable Moves ≥ ±5%
-          <span style={{ fontWeight: 400, fontSize: 12, color: '#a0aec0', marginLeft: 8 }}>
-            {notable.length ? `${notable.length} holding${notable.length > 1 ? 's' : ''}` : '— None today'}
-          </span>
-        </div>
-        {notable.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            {notable.map(r => (
-              <div key={r.eodhd} style={{
-                padding: '10px 16px', borderRadius: 10,
-                background: r.pct > 0 ? '#f0fff4' : '#fff5f5',
-                border: `1px solid ${r.pct > 0 ? '#c6f6d5' : '#fed7d7'}`,
-                display: 'flex', alignItems: 'baseline', gap: 10,
-              }}>
-                <span style={{ fontWeight: 800, fontSize: 14 }}>{r.eodhd.replace('.US', '')}</span>
-                <span style={{ fontSize: 11, color: '#718096' }}>{r.name}</span>
-                <span style={{ fontWeight: 800, fontSize: 16, color: pctColor(r.pct) }}>{fmtPct(r.pct)}</span>
-              </div>
-            ))}
+  return (
+    <div className="max-w-7xl mx-auto px-6 pt-8 pb-24">
+      {/* Hero banner */}
+      <section className="bg-surface-container rounded-lg p-8 mb-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold tracking-widest uppercase rounded-sm border border-primary/20 mb-3 inline-block">Market Report</span>
+            <h2 className="text-4xl font-extrabold tracking-tighter">🇺🇸 US Session Wrap</h2>
+            <p className="text-on-surface-variant mt-1 text-sm">Wall Street Close · All prices via EODHD</p>
           </div>
-        )}
+          <div className="flex items-center gap-3">
+            <span className="text-on-surface-variant text-sm">Avg session move:</span>
+            <span className={`text-3xl font-black tabular ${pctColor(avgMove)}`}>{avgMove != null ? fmtPct(avgMove) : '—'}</span>
+            {avgMove != null && (
+              <span className={`material-symbols-outlined text-2xl ${pctColor(avgMove)}`}>{avgMove >= 0 ? 'trending_up' : 'trending_down'}</span>
+            )}
+            <span className="text-xs text-on-surface-variant ml-1">{withPct.length}/{rows.length} US</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Index cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {INDICES.map(idx => {
+          const d   = indices[idx.ticker]
+          const pct = d ? parseFloat(d.pct) : null
+          return (
+            <div key={idx.ticker} className={`bg-surface-container p-6 border-t-4 ${pct == null ? 'border-outline-variant' : pct >= 0 ? 'border-secondary' : 'border-error'}`}>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-[10px] font-bold tracking-wider text-on-surface-variant uppercase mb-1">{idx.label}</p>
+                  <h3 className="text-3xl font-bold tabular">
+                    {d?.close != null ? d.close.toLocaleString('en-AU', { maximumFractionDigits:2 }) : '—'}
+                  </h3>
+                </div>
+                {pct != null && <span className={`px-2 py-1 text-xs font-bold rounded-sm tabular ${pctBadge(pct)}`}>{fmtPct(pct)}</span>}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      {/* ── Sector Snapshot ── */}
-      <div style={card}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>🗂 Sector Snapshot</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
-          {sectors.map(s => (
-            <div key={s.name} style={{
-              padding: '12px 14px', borderRadius: 10,
-              background: s.avg > 0 ? '#f0fff4' : s.avg < 0 ? '#fff5f5' : '#f7fafc',
-              border: `1px solid ${s.avg > 0 ? '#c6f6d5' : s.avg < 0 ? '#fed7d7' : '#e2e8f0'}`,
-            }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#2d3748', marginBottom: 4 }}>{s.name}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: pctColor(s.avg), marginBottom: 6 }}>{fmtPct(s.avg)}</div>
-              <div style={{ fontSize: 10, color: '#718096', lineHeight: 1.8 }}>
-                {s.tickers.map(t => (
-                  <span key={t.eodhd} style={{ marginRight: 8 }}>
-                    <span style={{ fontWeight: 600 }}>{t.eodhd.replace('.US', '')}</span>
-                    <span style={{ color: pctColor(t.pct), marginLeft: 3 }}>{fmtPct(t.pct)}</span>
-                  </span>
+      {/* Movers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+        <section>
+          <div className="flex items-center gap-2 mb-5">
+            <span className="material-symbols-outlined text-secondary">rocket_launch</span>
+            <h4 className="text-lg font-bold">Top 10 US Gainers</h4>
+          </div>
+          <MoverTable items={gainers} isGainer={true} />
+        </section>
+        <section>
+          <div className="flex items-center gap-2 mb-5">
+            <span className="material-symbols-outlined text-error">trending_down</span>
+            <h4 className="text-lg font-bold">Top 10 US Losers</h4>
+          </div>
+          <MoverTable items={losers} isGainer={false} />
+        </section>
+      </div>
+
+      {/* Notable moves */}
+      <div className={`mb-10 p-5 rounded-lg border ${notable.length > 0 ? 'bg-surface-container border-outline-variant/10' : 'bg-surface-container border-outline-variant/10'}`}>
+        <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">bolt</span>Notable Moves ≥±5%
+        </h4>
+        {notable.length === 0
+          ? <p className="text-sm text-on-surface-variant">None today</p>
+          : <div className="flex flex-wrap gap-3">
+              {notable.map(r => (
+                <div key={r.eodhd} className="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded">
+                  <span className="font-bold text-sm">{r.eodhd.split('.')[0]}</span>
+                  <span className={`font-bold text-sm tabular ${pctColor(parseFloat(r.pct))}`}>{fmtPct(parseFloat(r.pct))}</span>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Sector snapshot */}
+      <section className="mb-10">
+        <h4 className="text-2xl font-black tracking-tight mb-2">Sector Snapshot</h4>
+        <p className="text-on-surface-variant text-sm mb-6">Performance across {SECTOR_ORDER.length} key verticals</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-outline-variant/10 border border-outline-variant/10">
+          {sectorData.map(({ sector, avg, members }) => (
+            <div key={sector} className={`p-4 hover:bg-surface-container transition-colors ${avg == null ? 'bg-surface' : avg > 0 ? 'bg-secondary/5' : avg < 0 ? 'bg-error/5' : 'bg-surface'}`}>
+              <p className="text-[10px] font-bold text-on-surface-variant mb-1 truncate">{sector}</p>
+              <p className={`text-xl font-black tabular mb-2 ${pctColor(avg)}`}>{avg != null ? fmtPct(avg) : '—'}</p>
+              <div className="flex flex-wrap gap-1">
+                {members.slice(0,2).map(m => (
+                  <span key={m.eodhd} className="text-[9px] px-1 bg-surface-container-high text-on-surface-variant">{m.eodhd.split('.')[0]}</span>
                 ))}
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* ── US Market News ── */}
-      <div style={card}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-          📰 US Market News
-          <span style={{ fontWeight: 400, fontSize: 11, color: '#a0aec0', marginLeft: 8 }}>
-            via EODHD · your top holdings
-          </span>
+      {/* US market news */}
+      <section>
+        <div className="flex items-center justify-between mb-6 border-l-4 border-primary pl-4">
+          <h4 className="text-2xl font-black tracking-tight">US Market News</h4>
         </div>
-        {newsLoading ? (
-          <div style={{ textAlign: 'center', padding: 30, color: '#a0aec0' }}>
-            <div className="spinner" style={{ margin: '0 auto 10px' }} />
-            Loading news…
-          </div>
-        ) : news.length === 0 ? (
-          <div style={{ color: '#a0aec0', fontSize: 13 }}>No news available.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {news.map((item, i) => (
-              <a key={i} href={item.link} target="_blank" rel="noopener noreferrer"
-                style={{ textDecoration: 'none' }}>
-                <div style={{
-                  padding: '12px 14px', borderRadius: 10,
-                  background: i % 2 ? '#f7fafc' : '#fff',
-                  border: '1px solid #e2e8f0',
-                  transition: 'border-color .15s',
-                }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#2d3748', marginBottom: 6, lineHeight: 1.4 }}>
-                    {item.title}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: '#a0aec0' }}>{timeAgo(item.date)}</span>
-                    {item.symbols?.slice(0, 5).map(s => (
-                      <span key={s} style={{
-                        fontSize: 10, fontWeight: 700, padding: '1px 7px',
-                        borderRadius: 10, background: '#ebf8ff', color: '#2b6cb0',
-                      }}>{s.split('.')[0]}</span>
-                    ))}
-                    <SentimentBadge sentiment={item.sentiment} />
-                  </div>
+        {newsLoading && <p className="text-on-surface-variant text-sm">Loading news…</p>}
+        {!newsLoading && news.length === 0 && <p className="text-on-surface-variant text-sm">No news available.</p>}
+        <div className="space-y-3">
+          {news.map((a, i) => (
+            <article key={i} className="flex gap-5 bg-surface-container hover:bg-surface-container-high transition-colors p-5 rounded-lg group">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold text-primary uppercase">{a.source || 'News'}</span>
+                  <span className="text-[10px] text-on-surface-variant">· {a.date ? timeAgo(a.date) : ''}</span>
+                  {(a.symbols || []).slice(0,3).map((s,j) => (
+                    <span key={j} className="px-1.5 py-0.5 bg-surface-container-highest text-on-surface-variant text-[9px] font-mono border border-outline-variant/10">
+                      {s.split('.')[0]}
+                    </span>
+                  ))}
                 </div>
-              </a>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Full Scorecard ── */}
-      <div style={card}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-          📋 Full US Scorecard
-          <span style={{ fontWeight: 400, fontSize: 11, color: '#a0aec0', marginLeft: 8 }}>sorted by daily % change</span>
+                <a href={a.link||a.url||'#'} target="_blank" rel="noopener noreferrer"
+                  className="text-sm font-bold leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                  {a.title}
+                </a>
+              </div>
+            </article>
+          ))}
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-            <thead>
-              <tr style={{ background: '#f7fafc' }}>
-                <th style={{ ...TH, width: 28 }}>#</th>
-                <th style={TH}>Ticker</th>
-                <th style={TH}>Name</th>
-                <th style={TH}>Sector</th>
-                <th style={{ ...TH, textAlign: 'right' }}>Close</th>
-                <th style={{ ...TH, textAlign: 'right' }}>Prev Close</th>
-                <th style={{ ...TH, textAlign: 'right' }}>Chg %</th>
-                <th style={{ ...TH, minWidth: 90 }}>Bar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...sorted, ...unpriced].map((r, i) => (
-                <tr key={r.eodhd} style={{ background: rowBg(r.pct, i) }}>
-                  <td style={{ ...TD, color: '#a0aec0', fontSize: 11 }}>{i + 1}</td>
-                  <td style={{ ...TD, fontWeight: 700 }}>{r.eodhd.replace('.US', '')}</td>
-                  <td style={{ ...TD, color: '#4a5568', fontSize: 12 }}>{r.name}</td>
-                  <td style={{ ...TD, fontSize: 11, color: '#718096' }}>{r.sector}</td>
-                  <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>
-                    {r.close != null ? fmt(r.close) : <span style={{ color: '#cbd5e0' }}>—</span>}
-                  </td>
-                  <td style={{ ...TD, textAlign: 'right', color: '#718096' }}>
-                    {r.prev != null ? fmt(r.prev) : <span style={{ color: '#cbd5e0' }}>—</span>}
-                  </td>
-                  <td style={{ ...TD, textAlign: 'right', fontWeight: 700, color: pctColor(r.pct) }}>
-                    {fmtPct(r.pct)}
-                  </td>
-                  <td style={{ ...TD, paddingRight: 16, minWidth: 90 }}>
-                    <PctBar pct={r.pct} max={maxPct} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      </section>
     </div>
   )
 }

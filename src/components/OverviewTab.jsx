@@ -1,24 +1,17 @@
 import { useState } from 'react'
 import ExchPill from './ExchPill'
-import { fmtCcy, fmt } from '../utils'
-import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
+import { fmtCcy, fmtPct, fmt } from '../utils'
 
 const REGIONS = [
-  { key: 'AU', label: '🇦🇺 ASX',    color: '#ebf8ff', border: '#bee3f8', text: '#2b6cb0' },
-  { key: 'US', label: '🇺🇸 US',     color: '#f0fff4', border: '#c6f6d5', text: '#276749' },
-  { key: 'EU', label: '🇪🇺 Europe', color: '#fffaf0', border: '#fbd38d', text: '#744210' },
+  { key: 'AU', label: 'ASX',    hexColor: '#FF9F43', bg: 'bg-[#FF9F43]/10', text: 'text-[#FF9F43]' },
+  { key: 'US', label: 'US',     hexColor: '#4F8EF7', bg: 'bg-[#4F8EF7]/10', text: 'text-[#4F8EF7]' },
+  { key: 'EU', label: 'Europe', hexColor: '#B76DFF', bg: 'bg-[#B76DFF]/10', text: 'text-[#B76DFF]' },
 ]
-
-const EXCH_FILTERS = ['All', 'AU', 'US', 'EU']
 const DEFAULT_ROWS = 8
 
-const SORT_COLS = ['close', 'pct', 'value']
-
 function safeSort(a, b, col, dir) {
-  const an = parseFloat(a[col])
-  const bn = parseFloat(b[col])
-  const aOk = isFinite(an)
-  const bOk = isFinite(bn)
+  const an = parseFloat(a[col]), bn = parseFloat(b[col])
+  const aOk = isFinite(an), bOk = isFinite(bn)
   if (!aOk && !bOk) return 0
   if (!aOk) return 1
   if (!bOk) return -1
@@ -26,284 +19,194 @@ function safeSort(a, b, col, dir) {
 }
 
 function SortIcon({ col, sortCol, sortDir }) {
-  if (sortCol !== col) return <span style={{ color: '#cbd5e1', marginLeft: 3 }}>⇅</span>
-  return <span style={{ color: '#3182ce', marginLeft: 3 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+  if (sortCol !== col) return <span className="text-on-surface-variant/30 ml-1">↕</span>
+  return <span className="text-primary ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
 }
 
-function MoverRow({ h, rank }) {
-  const pctNum = parseFloat(h.pct)
+function MoverRow({ h, rank, isGainer }) {
+  const pct = parseFloat(h.pct)
   return (
-    <tr>
-      <td style={{ color: '#cbd5e1', fontSize: 11, paddingLeft: 16 }}>{rank}</td>
-      <td>
-        <div style={{ fontWeight: 700, fontSize: 12 }}>{h.eodhd} <ExchPill exch={h.exch} /></div>
-        <div style={{ fontSize: 10, color: '#a0aec0' }}>{h.name}</div>
+    <tr className={`hover:bg-surface-container-high transition-colors ${rank % 2 === 0 ? 'bg-surface-container/30' : ''}`}>
+      <td className="px-6 py-4 text-xs font-medium text-on-surface-variant tabular">#{rank}</td>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <span className="font-bold">{h.eodhd.split('.')[0]}</span>
+          <ExchPill exch={h.exch} />
+        </div>
+        <div className="text-xs text-on-surface-variant mt-0.5 truncate max-w-[140px]">{h.name}</div>
       </td>
-      <td className="num" style={{ fontSize: 12 }}>
-        {h.close != null ? fmt(h.close) : '—'}
+      <td className="px-6 py-4 text-right text-xs tabular">{h.close != null ? fmt(h.close) : '–'}</td>
+      <td className={`px-6 py-4 text-right text-xs font-bold tabular ${isGainer ? 'text-secondary' : 'text-error'}`}>
+        {fmtPct(pct)}
       </td>
-      <td className="num">
-        <span style={{ fontWeight: 700, fontSize: 13 }}
-          className={pctNum > 0 ? 'green' : pctNum < 0 ? 'red' : 'grey'}>
-          {pctNum > 0 ? '+' : ''}{fmt(pctNum)}%
-        </span>
-      </td>
-      <td className="num" style={{ fontSize: 12 }}>{fmtCcy(h.value)}</td>
+      <td className="px-6 py-4 text-right text-xs tabular">{fmtCcy(h.value)}</td>
     </tr>
   )
 }
 
-export default function OverviewTab({ prices, loading, deleted }) {
-  const [exchFilter, setExchFilter] = useState('All')
+export default function OverviewTab({ prices, loading, today, portfolio, totalValue, deleted }) {
+  const [exchFilter,    setExchFilter]    = useState('All')
   const [expandGainers, setExpandGainers] = useState(false)
-  const [expandLosers, setExpandLosers] = useState(false)
-  const [gainerSortCol, setGainerSortCol] = useState('pct')
-  const [gainerSortDir, setGainerSortDir] = useState('desc')
-  const [loserSortCol, setLoserSortCol] = useState('pct')
-  const [loserSortDir, setLoserSortDir] = useState('asc')
+  const [expandLosers,  setExpandLosers]  = useState(false)
+  const [gSortCol,      setGSortCol]      = useState('pct')
+  const [gSortDir,      setGSortDir]      = useState('desc')
+  const [lSortCol,      setLSortCol]      = useState('pct')
+  const [lSortDir,      setLSortDir]      = useState('asc')
 
-  const toggleGainerSort = (col) => {
-    if (gainerSortCol === col) setGainerSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setGainerSortCol(col); setGainerSortDir(col === 'pct' ? 'desc' : 'desc') }
-  }
-  const toggleLoserSort = (col) => {
-    if (loserSortCol === col) setLoserSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setLoserSortCol(col); setLoserSortDir(col === 'pct' ? 'asc' : 'desc') }
-  }
+  const toggleGSort = (col) => { if (gSortCol === col) setGSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setGSortCol(col); setGSortDir('desc') } }
+  const toggleLSort = (col) => { if (lSortCol === col) setLSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLSortCol(col); setLSortDir('asc') } }
 
-  // Filter out deleted tickers first
-  const activePortfolio = PORTFOLIO.filter(h => !deleted.has(h.eodhd))
-
-  const enriched = activePortfolio.map(h => ({
-    ...h,
-    ...(prices[h.eodhd] || {}),
-    pctNum: parseFloat((prices[h.eodhd] || {}).pct),
+  const active   = portfolio.filter(h => !deleted.has(h.eodhd))
+  const enriched = active.map(h => ({
+    ...h, ...(prices[h.eodhd] || {}),
+    pctNum: parseFloat(prices[h.eodhd]?.pct || 0),
   }))
-
   const withPrices = enriched.filter(h => h.ok && isFinite(h.pctNum))
+  const activeTotal = active.reduce((s, h) => s + h.value, 0)
 
-  // Portfolio-level stats (use active portfolio total for weight calc)
-  const activeTotalValue = activePortfolio.reduce((s, h) => s + h.value, 0)
-  const avgMove = withPrices.length
-    ? withPrices.reduce((s, h) => s + h.pctNum * (h.value / (activeTotalValue || 1)), 0)
-    : null
+  const avgMove  = withPrices.length ? withPrices.reduce((s, h) => s + h.pctNum * (h.value / (activeTotal || 1)), 0) : null
   const topGainer = [...withPrices].sort((a, b) => b.pctNum - a.pctNum)[0]
-  const topLoser  = [...withPrices].sort((a, b) => a.pctNum - b.pctNum)[0]
   const notable   = withPrices.filter(h => Math.abs(h.pctNum) >= 5)
 
-  // Regional breakdown (active only)
-  const regionData = REGIONS.map(reg => {
-    const holdings = enriched.filter(h => h.exch === reg.key)
-    const totalVal = holdings.reduce((s, h) => s + h.value, 0)
-    const withP    = holdings.filter(h => h.ok && isFinite(h.pctNum))
-    const avgPct   = withP.length
-      ? withP.reduce((s, h) => s + h.pctNum * (h.value / (totalVal || 1)), 0)
-      : null
-    return { ...reg, count: holdings.length, value: totalVal, avgPct, loaded: withP.length }
+  const regionData = REGIONS.map(r => {
+    const rh  = active.filter(h => h.exch === r.key)
+    const rwp = withPrices.filter(h => h.exch === r.key)
+    const val = rh.reduce((s, h) => s + h.value, 0)
+    const avg = rwp.length ? rwp.reduce((s, h) => s + h.pctNum * (h.value / (val || 1)), 0) : null
+    return { ...r, count: rh.length, value: val, avg, weight: activeTotal ? val / activeTotal * 100 : 0 }
   })
 
-  // Apply exchange filter to gainers/losers
-  const filtered = exchFilter === 'All'
-    ? withPrices
-    : withPrices.filter(h => h.exch === exchFilter)
+  const filtered  = (exchFilter === 'All' ? withPrices : withPrices.filter(h => h.exch === exchFilter))
+  const gainers   = [...filtered].sort((a, b) => safeSort(a, b, gSortCol, gSortDir)).filter(h => h.pctNum >= 0)
+  const losers    = [...filtered].sort((a, b) => safeSort(a, b, lSortCol, lSortDir)).filter(h => h.pctNum < 0)
+  const showG     = expandGainers ? gainers : gainers.slice(0, DEFAULT_ROWS)
+  const showL     = expandLosers  ? losers  : losers.slice(0, DEFAULT_ROWS)
 
-  // Sort and split gainers/losers
-  const allGainersSorted = [...filtered]
-    .filter(h => h.pctNum >= 0)
-    .sort((a, b) => safeSort(a, b, gainerSortCol, gainerSortDir))
-  const allLosersSorted = [...filtered]
-    .filter(h => h.pctNum < 0)
-    .sort((a, b) => safeSort(a, b, loserSortCol, loserSortDir))
-
-  const gainers = expandGainers ? allGainersSorted : allGainersSorted.slice(0, DEFAULT_ROWS)
-  const losers  = expandLosers  ? allLosersSorted  : allLosersSorted.slice(0, DEFAULT_ROWS)
-
-  const filterBtnStyle = (active) => ({
-    padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-    border: active ? 'none' : '1px solid #e2e8f0',
-    background: active ? '#3182ce' : '#fff',
-    color: active ? '#fff' : '#4a5568', cursor: 'pointer',
-  })
+  const avgCol  = avgMove == null ? '' : avgMove >= 0 ? 'text-secondary' : 'text-error'
+  const thCls   = "px-6 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest cursor-pointer hover:text-on-surface select-none"
 
   return (
-    <>
-      {/* Top KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
-        <div className="card" style={{ background: '#ebf8ff', border: '1px solid #bee3f8', padding: '14px 18px' }}>
-          <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Portfolio Value</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#2d3748' }}>{fmtCcy(TOTAL_PORTFOLIO)}</div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>Snapshot · 13 Mar 2026</div>
+    <div className="max-w-[1400px] mx-auto px-6 py-8 pb-24">
+      {/* KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-10">
+        <div className="bg-surface-container p-6 rounded-lg relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Portfolio Value</p>
+          <h2 className="text-3xl font-extrabold tracking-tight tabular">{fmtCcy(activeTotal)}</h2>
+          <p className="text-xs text-on-surface-variant mt-2">{active.length} active holdings</p>
         </div>
-        <div className="card" style={{ background: '#f0fff4', border: '1px solid #c6f6d5', padding: '14px 18px' }}>
-          <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Avg Move Today</div>
-          <div style={{ fontSize: 26, fontWeight: 800 }}
-            className={avgMove == null ? 'grey' : avgMove >= 0 ? 'green' : 'red'}>
-            {avgMove == null ? '—' : `${avgMove >= 0 ? '+' : ''}${fmt(avgMove)}%`}
-          </div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>
-            {loading ? 'loading…' : `${withPrices.length} of ${activePortfolio.length} prices loaded`}
-          </div>
+        <div className="bg-surface-container p-6 rounded-lg">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Avg Move Today</p>
+          <h2 className={`text-3xl font-extrabold tracking-tight tabular ${avgCol}`}>
+            {avgMove != null ? fmtPct(avgMove) : '—'}
+          </h2>
+          <p className="text-xs text-on-surface-variant mt-2">
+            {loading ? 'Loading prices…' : `${withPrices.length}/${active.length} prices loaded`}
+          </p>
         </div>
-        <div className="card" style={{ background: '#fffaf0', border: '1px solid #fbd38d', padding: '14px 18px' }}>
-          <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Top Gainer</div>
-          <div style={{ fontSize: 22, fontWeight: 800 }} className="green">
-            {topGainer ? `+${fmt(topGainer.pctNum)}%` : '—'}
-          </div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{topGainer?.eodhd ?? ''}</div>
+        <div className="bg-surface-container p-6 rounded-lg">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Top Gainer</p>
+          {topGainer ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-extrabold tracking-tight tabular text-secondary">{fmtPct(topGainer.pctNum)}</h2>
+                <span className="text-sm font-bold text-on-surface-variant">{topGainer.eodhd.split('.')[0]}</span>
+              </div>
+              <p className="text-xs text-on-surface-variant mt-2 truncate">{topGainer.name}</p>
+            </>
+          ) : <h2 className="text-3xl font-extrabold text-on-surface-variant">—</h2>}
         </div>
-        <div className="card" style={{ background: '#fff5f5', border: '1px solid #fed7d7', padding: '14px 18px' }}>
-          <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>Notable Moves ≥±5%</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#2d3748' }}>{notable.length}</div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>
-            {notable.length === 0 ? 'None today' : notable.slice(0, 3).map(h => h.eodhd).join(', ')}
-          </div>
+        <div className="bg-surface-container p-6 rounded-lg">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Notable Moves</p>
+          <h2 className="text-3xl font-extrabold tracking-tight tabular">{notable.length}</h2>
+          <p className="text-xs text-on-surface-variant mt-2">{notable.length === 0 ? 'None today' : 'Assets exceeding ±5%'}</p>
         </div>
       </div>
 
-      {/* Regional breakdown */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#4a5568', marginBottom: 10 }}>Regional Breakdown</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-          {regionData.map(reg => (
-            <div key={reg.key} className="card" style={{ background: reg.color, border: `1px solid ${reg.border}`, padding: '14px 18px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: reg.text, marginBottom: 8 }}>{reg.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#2d3748' }}>{fmtCcy(reg.value)}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12 }}>
-                <span style={{ color: '#718096' }}>{reg.count} holdings</span>
-                {reg.avgPct != null ? (
-                  <span style={{ fontWeight: 700 }} className={reg.avgPct >= 0 ? 'green' : 'red'}>
-                    {reg.avgPct >= 0 ? '+' : ''}{fmt(reg.avgPct)}% avg
-                  </span>
-                ) : (
-                  <span style={{ color: '#a0aec0' }}>—</span>
-                )}
+      {/* Regional */}
+      <section className="mb-10">
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-bold">Regional Distribution</h3>
+            <p className="text-xs text-on-surface-variant">Global exposure and performance · {today}</p>
+          </div>
+          <div className="flex bg-surface-container-low p-1 rounded-md gap-1">
+            {['All','AU','US','EU'].map(f => (
+              <button key={f} onClick={() => setExchFilter(f)}
+                className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${exchFilter === f ? 'bg-surface-container-high text-primary' : 'text-on-surface-variant hover:text-on-surface'}`}>
+                {f}
+              </button>
+            ))}
+            <span className="px-3 py-1.5 text-xs text-on-surface-variant/60 border-l border-outline-variant/20">{withPrices.length} priced</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {regionData.map(r => (
+            <div key={r.key} className="bg-surface-container-low p-6 rounded-lg">
+              <div className="flex justify-between items-start mb-4">
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm ${r.bg} ${r.text}`}>{r.key}</span>
+                <span className="text-xs text-on-surface-variant">{r.count} Holdings</span>
               </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ height: 4, borderRadius: 2, background: '#e2e8f0' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 2,
-                    width: `${(reg.value / TOTAL_PORTFOLIO * 100).toFixed(1)}%`,
-                    background: reg.text,
-                  }} />
+              <h4 className="text-2xl font-bold tabular mb-1">{fmtCcy(r.value)}</h4>
+              <p className={`text-xs mb-5 ${r.avg != null ? (r.avg >= 0 ? 'text-secondary' : 'text-error') : 'text-on-surface-variant'}`}>
+                {r.avg != null ? fmtPct(r.avg) + ' Today' : 'No prices'}
+              </p>
+              <div className="space-y-2">
+                <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  <span>Weight</span><span>{fmt(r.weight, 1)}%</span>
                 </div>
-                <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 3 }}>
-                  {fmt(reg.value / TOTAL_PORTFOLIO * 100, 1)}% of portfolio
+                <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${r.weight}%`, backgroundColor: r.hexColor }}></div>
                 </div>
               </div>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Notable moves banner */}
-      {notable.length > 0 && (
-        <div style={{
-          background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 10,
-          padding: '10px 16px', marginBottom: 16, fontSize: 12, color: '#744210',
-          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center'
-        }}>
-          <span style={{ fontWeight: 700 }}>⚡ Notable moves today:</span>
-          {notable.map(h => (
-            <span key={h.eodhd} style={{ fontWeight: 600 }}>
-              {h.eodhd} <span className={h.pctNum >= 0 ? 'green' : 'red'}>
-                {h.pctNum >= 0 ? '+' : ''}{fmt(h.pctNum)}%
-              </span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Exchange filter pills */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#718096', marginRight: 4 }}>Filter:</span>
-        {EXCH_FILTERS.map(ex => (
-          <button key={ex} onClick={() => { setExchFilter(ex); setExpandGainers(false); setExpandLosers(false) }}
-            style={filterBtnStyle(exchFilter === ex)}>
-            {ex === 'All' ? 'All' : ex === 'AU' ? '🇦🇺 ASX' : ex === 'US' ? '🇺🇸 US' : '🇪🇺 EU'}
-          </button>
-        ))}
-        <span style={{ fontSize: 11, color: '#a0aec0', marginLeft: 8 }}>
-          {filtered.length} holdings
-        </span>
-      </div>
+      </section>
 
       {/* Gainers / Losers */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#38a169' }}>▲ Top Gainers</div>
-            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allGainersSorted.length} stocks</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {[
+          { list: showG, all: gainers, expand: expandGainers, setExpand: setExpandGainers, sortCol: gSortCol, sortDir: gSortDir, toggleSort: toggleGSort, isGainer: true, title: 'Top Gainers', color: 'text-secondary', icon: 'arrow_upward' },
+          { list: showL, all: losers,  expand: expandLosers,  setExpand: setExpandLosers,  sortCol: lSortCol, sortDir: lSortDir, toggleSort: toggleLSort, isGainer: false, title: 'Top Losers', color: 'text-error', icon: 'arrow_downward' },
+        ].map(({ list, all, expand, setExpand, sortCol, sortDir, toggleSort, isGainer, title, color, icon }) => (
+          <div key={title} className="bg-surface-container rounded-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-outline-variant/10 flex justify-between items-center">
+              <h3 className={`text-sm font-bold uppercase tracking-widest ${color} flex items-center gap-2`}>
+                <span className="material-symbols-outlined text-lg">{icon}</span>{title}
+              </h3>
+              <span className="text-xs text-on-surface-variant">{all.length} stocks</span>
+            </div>
+            <table className="w-full text-left">
+              <thead className="bg-surface-container-low">
+                <tr>
+                  <th className={thCls}>#</th>
+                  <th className={thCls}>Holding</th>
+                  {['close','pct','value'].map(c => (
+                    <th key={c} className={`${thCls} text-right`} onClick={() => toggleSort(c)}>
+                      {c === 'pct' ? 'Change' : c.charAt(0).toUpperCase() + c.slice(1)}
+                      <SortIcon col={c} sortCol={sortCol} sortDir={sortDir} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/5">
+                {list.map((h, i) => <MoverRow key={h.eodhd} h={h} rank={i + 1} isGainer={isGainer} />)}
+                {list.length === 0 && (
+                  <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-on-surface-variant">No data</td></tr>
+                )}
+              </tbody>
+            </table>
+            {all.length > DEFAULT_ROWS && (
+              <div className="px-6 py-3 border-t border-outline-variant/10 text-center">
+                <button onClick={() => setExpand(e => !e)} className="text-xs font-bold text-primary hover:underline">
+                  {expand ? 'Show less' : `Show all ${all.length}`}
+                </button>
+              </div>
+            )}
           </div>
-          <table>
-            <thead><tr>
-              <th>#</th><th>Holding</th>
-              <th className="num" onClick={() => toggleGainerSort('close')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Close <SortIcon col="close" sortCol={gainerSortCol} sortDir={gainerSortDir} />
-              </th>
-              <th className="num" onClick={() => toggleGainerSort('pct')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Change <SortIcon col="pct" sortCol={gainerSortCol} sortDir={gainerSortDir} />
-              </th>
-              <th className="num" onClick={() => toggleGainerSort('value')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Value <SortIcon col="value" sortCol={gainerSortCol} sortDir={gainerSortDir} />
-              </th>
-            </tr></thead>
-            <tbody>
-              {gainers.length === 0
-                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>
-                    {filtered.length === 0 ? 'No holdings in this region' : 'No gainers today'}
-                  </td></tr>
-                : gainers.map((h, i) => <MoverRow key={h.eodhd} h={h} rank={i + 1} />)
-              }
-            </tbody>
-          </table>
-          {allGainersSorted.length > DEFAULT_ROWS && (
-            <button onClick={() => setExpandGainers(v => !v)} style={{
-              width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
-              borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
-              color: '#3182ce', cursor: 'pointer',
-            }}>
-              {expandGainers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allGainersSorted.length} gainers`}
-            </button>
-          )}
-        </div>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#e53e3e' }}>▼ Top Losers</div>
-            <span style={{ fontSize: 11, color: '#a0aec0' }}>{allLosersSorted.length} stocks</span>
-          </div>
-          <table>
-            <thead><tr>
-              <th>#</th><th>Holding</th>
-              <th className="num" onClick={() => toggleLoserSort('close')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Close <SortIcon col="close" sortCol={loserSortCol} sortDir={loserSortDir} />
-              </th>
-              <th className="num" onClick={() => toggleLoserSort('pct')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Change <SortIcon col="pct" sortCol={loserSortCol} sortDir={loserSortDir} />
-              </th>
-              <th className="num" onClick={() => toggleLoserSort('value')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Value <SortIcon col="value" sortCol={loserSortCol} sortDir={loserSortDir} />
-              </th>
-            </tr></thead>
-            <tbody>
-              {losers.length === 0
-                ? <tr><td colSpan={5} style={{ textAlign: 'center', color: '#a0aec0', padding: 16 }}>
-                    {filtered.length === 0 ? 'No holdings in this region' : 'No losers today'}
-                  </td></tr>
-                : losers.map((h, i) => <MoverRow key={h.eodhd} h={h} rank={i + 1} />)
-              }
-            </tbody>
-          </table>
-          {allLosersSorted.length > DEFAULT_ROWS && (
-            <button onClick={() => setExpandLosers(v => !v)} style={{
-              width: '100%', padding: '8px 0', marginTop: 8, border: '1px solid #e2e8f0',
-              borderRadius: 8, background: '#f7fafc', fontSize: 12, fontWeight: 600,
-              color: '#3182ce', cursor: 'pointer',
-            }}>
-              {expandLosers ? `Show top ${DEFAULT_ROWS}` : `Show all ${allLosersSorted.length} losers`}
-            </button>
-          )}
-        </div>
+        ))}
       </div>
-    </>
+    </div>
   )
 }

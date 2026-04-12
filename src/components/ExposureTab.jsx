@@ -1,195 +1,157 @@
 import { useState } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import ExchPill from './ExchPill'
 import { fmtCcy, fmt } from '../utils'
-import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
 
-const COLORS = [
-  '#3182ce','#38a169','#d69e2e','#e53e3e','#805ad5',
-  '#dd6b20','#319795','#d53f8c','#2b6cb0','#276749',
-  '#744210','#9b2335','#553c9a','#c05621','#285e61',
-]
-
-const COLS = [
-  { key: 'eodhd', label: 'Ticker', num: false },
-  { key: 'name',  label: 'Name',   num: false },
-  { key: 'value', label: 'Value',  num: true },
-  { key: 'pct',   label: 'Weight', num: true },
-]
-
-const STRING_COLS = new Set(['eodhd', 'name'])
+const COLORS = ['#acc7ff','#508ff8','#b76dff','#4edea3','#6900b3','#dd6b20','#319795','#d53f8c','#2b6cb0','#276749','#744210','#9b2335','#553c9a','#c05621']
+const STR_COLS = new Set(['eodhd','name'])
 
 function safeSort(a, b, col, dir) {
-  const av = a[col], bv = b[col]
-  if (STRING_COLS.has(col)) {
-    const as = String(av ?? ''), bs = String(bv ?? '')
+  if (STR_COLS.has(col)) {
+    const as = String(a[col]??''), bs = String(b[col]??'')
     return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
   }
-  const an = parseFloat(av), bn = parseFloat(bv)
+  const an = parseFloat(a[col]), bn = parseFloat(b[col])
   const aOk = isFinite(an), bOk = isFinite(bn)
-  if (!aOk && !bOk) return 0
-  if (!aOk) return 1
-  if (!bOk) return -1
+  if (!aOk && !bOk) return 0; if (!aOk) return 1; if (!bOk) return -1
   return dir === 'asc' ? an - bn : bn - an
 }
 
-const CustomTooltip = ({ active, payload }) => {
+function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div style={{
-      background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-      padding: '10px 14px', fontSize: 12, boxShadow: '0 2px 12px rgba(0,0,0,.1)'
-    }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
-      <div style={{ color: '#718096', fontSize: 11 }}>{d.code}</div>
-      <div style={{ fontWeight: 700, fontSize: 16, margin: '4px 0' }}>{fmtCcy(d.value)}</div>
-      <div style={{ color: '#3182ce' }}>{fmt(d.pct)}% of portfolio</div>
+    <div className="bg-surface-container-highest border border-outline-variant/20 p-3 rounded-lg shadow-xl text-xs">
+      <p className="font-bold text-on-surface-variant mb-1">{d.name}</p>
+      <p className="text-base font-black tabular text-on-surface">{fmtCcy(d.value)}</p>
+      <p className="text-primary mt-1">{fmt(d.pct, 1)}% of portfolio</p>
     </div>
   )
 }
 
-const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct }) => {
-  if (pct < 2.5) return null
-  const R = innerRadius + (outerRadius - innerRadius) * 0.5
-  const rad = (midAngle * Math.PI) / 180
-  return (
-    <text
-      x={cx + R * Math.cos(-rad)}
-      y={cy + R * Math.sin(-rad)}
-      textAnchor="middle" dominantBaseline="middle"
-      fill="#fff" fontSize={11} fontWeight={700}
-    >
-      {fmt(pct, 1)}%
-    </text>
-  )
-}
-
-export default function ExposureTab({ deleted }) {
+export default function ExposureTab({ prices, portfolio, totalValue, deleted }) {
   const [sortCol, setSortCol] = useState('value')
   const [sortDir, setSortDir] = useState('desc')
+
+  const active      = portfolio.filter(h => !deleted.has(h.eodhd))
+  const activeTotal = active.reduce((s, h) => s + h.value, 0)
+  const byValue     = [...active].sort((a, b) => b.value - a.value)
+  const top14       = byValue.slice(0, 14)
+  const rest        = byValue.slice(14)
+  const othersVal   = rest.reduce((s, r) => s + r.value, 0)
+
+  const pieData = [
+    ...top14.map(r => ({ name: r.name, code: r.eodhd, value: r.value, pct: activeTotal ? r.value / activeTotal * 100 : 0 })),
+    ...(othersVal > 0 ? [{ name: `Others (${rest.length})`, code: '', value: othersVal, pct: activeTotal ? othersVal / activeTotal * 100 : 0 }] : [])
+  ]
+
+  const tableData = [...active].map(h => ({ ...h, pct: activeTotal ? h.value / activeTotal * 100 : 0 }))
+  const sorted    = [...tableData].sort((a, b) => safeSort(a, b, sortCol, sortDir))
+
+  const largest    = byValue[0]
+  const largestPct = largest && activeTotal ? largest.value / activeTotal * 100 : 0
 
   const toggleSort = (col) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('desc') }
   }
 
-  const SortIcon = ({ col }) => {
-    if (sortCol !== col) return <span style={{ color: '#cbd5e1' }}>⇅</span>
-    return <span style={{ color: '#3182ce' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
-  }
-
-  // Filter out deleted tickers
-  const activePortfolio = PORTFOLIO.filter(h => !deleted.has(h.eodhd))
-  const activeTotalValue = activePortfolio.reduce((s, h) => s + h.value, 0)
-
-  // Sort by value descending for pie; top 14 get individual slices, rest = "Others"
-  const byValue = [...activePortfolio].sort((a, b) => b.value - a.value)
-  const top     = byValue.slice(0, 14)
-  const rest    = byValue.slice(14)
-  const othersValue = rest.reduce((s, r) => s + r.value, 0)
-
-  const pieData = [
-    ...top.map(r => ({ name: r.name, code: r.eodhd, value: r.value, pct: (r.value / (activeTotalValue || 1)) * 100 })),
-    ...(othersValue > 0 ? [{ name: `Others (${rest.length})`, code: '', value: othersValue, pct: (othersValue / (activeTotalValue || 1)) * 100 }] : []),
-  ]
-
-  // Sortable table data (active only)
-  const tableData = activePortfolio.map(r => ({ ...r, pct: (r.value / (activeTotalValue || 1)) * 100 }))
-  const sorted = [...tableData].sort((a, b) => safeSort(a, b, sortCol, sortDir))
+  const thCls = "px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest cursor-pointer hover:text-on-surface select-none"
 
   return (
-    <>
-      {/* Summary KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
-        {[
-          { label: 'Total Portfolio', value: fmtCcy(TOTAL_PORTFOLIO), bg: '#ebf8ff', border: '#bee3f8' },
-          { label: 'Active Holdings', value: activePortfolio.length, bg: '#f0fff4', border: '#c6f6d5' },
-          { label: 'Largest Holding', value: `${fmt(byValue[0] ? (byValue[0].value / (activeTotalValue || 1)) * 100 : 0, 1)}%`, sub: byValue[0]?.name, bg: '#fffaf0', border: '#fbd38d' },
-        ].map(k => (
-          <div key={k.label} className="card" style={{ background: k.bg, border: `1px solid ${k.border}`, padding: '14px 18px' }}>
-            <div style={{ fontSize: 11, color: '#718096', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px' }}>{k.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#2d3748' }}>{k.value}</div>
-            {k.sub && <div style={{ fontSize: 11, color: '#718096', marginTop: 2 }}>{k.sub}</div>}
+    <div className="max-w-[1440px] mx-auto px-6 py-10 space-y-8">
+      {/* KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-surface-container p-6 rounded-sm border-t-4 border-primary">
+          <span className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase block mb-3">Total Portfolio</span>
+          <span className="text-3xl font-bold tracking-tight tabular">{fmtCcy(activeTotal)}</span>
+        </div>
+        <div className="bg-surface-container p-6 rounded-sm">
+          <span className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase block mb-3">Active Holdings</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold tabular">{active.length}</span>
+            <span className="text-on-surface-variant text-sm">positions</span>
           </div>
-        ))}
+        </div>
+        <div className="bg-surface-container p-6 rounded-sm">
+          <span className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase block mb-3">Largest Holding</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold tabular">{fmt(largestPct, 1)}%</span>
+            {largest && <span className="text-primary text-sm font-medium">{largest.eodhd.split('.')[0]}</span>}
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 16 }}>
-        {/* Pie chart */}
-        <div className="card">
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#4a5568', marginBottom: 4 }}>Top Holdings by Value</div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginBottom: 16 }}>Portfolio snapshot · 13 Mar 2026</div>
-          <ResponsiveContainer width="100%" height={340}>
+      {/* Chart + table */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Pie */}
+        <div className="lg:col-span-5 bg-surface-container-low p-8 rounded-sm">
+          <div className="mb-6">
+            <h2 className="text-lg font-bold">Portfolio Allocation</h2>
+            <p className="text-sm text-on-surface-variant">Top {top14.length} holdings by value</p>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%" cy="50%"
-                outerRadius={130}
-                dataKey="value"
-                labelLine={false}
-                label={renderCustomLabel}
-              >
-                {pieData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
+              <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={105} paddingAngle={2} dataKey="value">
+                {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                formatter={(v) => <span style={{ fontSize: 11, color: '#4a5568' }}>{v}</span>}
-                iconSize={10}
-              />
             </PieChart>
           </ResponsiveContainer>
+          <div className="mt-6 grid grid-cols-2 gap-y-2 gap-x-4">
+            {pieData.slice(0, 8).map((d, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                  <span className="text-xs text-on-surface-variant truncate max-w-[80px]">{d.code?.split('.')[0] || 'Others'}</span>
+                </div>
+                <span className="text-xs font-bold tabular">{fmt(d.pct, 1)}%</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Sortable table */}
-        <div className="card" style={{ overflowY: 'auto', maxHeight: 440 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#4a5568', marginBottom: 12 }}>All Holdings by Weight</div>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                {COLS.map(c => (
-                  <th key={c.key} className={c.num ? 'num' : ''} onClick={() => toggleSort(c.key)}
-                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                    {c.label} <SortIcon col={c.key} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r, i) => (
-                <tr key={r.eodhd}>
-                  <td style={{ color: '#cbd5e1', fontSize: 11 }}>{i + 1}</td>
-                  <td>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd} <ExchPill exch={r.exch} /></div>
-                  </td>
-                  <td style={{ fontSize: 12, color: '#4a5568', maxWidth: 200 }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                  </td>
-                  <td className="num" style={{ fontSize: 12, fontWeight: 600 }}>{fmtCcy(r.value)}</td>
-                  <td className="num">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                      <div style={{
-                        width: 40, height: 6, borderRadius: 3, background: '#edf2f7', overflow: 'hidden'
-                      }}>
-                        <div style={{
-                          width: `${Math.min(100, byValue[0] ? (r.value / byValue[0].value) * 100 : 0)}%`,
-                          height: '100%', background: COLORS[i % COLORS.length], borderRadius: 3
-                        }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: '#4a5568', fontWeight: 600 }}>
-                        {fmt(r.pct, 1)}%
-                      </span>
-                    </div>
-                  </td>
+        {/* Table */}
+        <div className="lg:col-span-7 bg-surface-container overflow-hidden rounded-sm">
+          <div className="p-6 border-b border-outline-variant/10">
+            <h2 className="text-lg font-bold">Full Holding Ledger</h2>
+          </div>
+          <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-surface-container-low sticky top-0">
+                <tr>
+                  <th className={thCls} onClick={() => toggleSort('eodhd')}>Ticker</th>
+                  <th className={thCls} onClick={() => toggleSort('name')}>Name</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('value')}>Value</th>
+                  <th className={`${thCls} text-right`} onClick={() => toggleSort('pct')}>Weight</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/5">
+                {sorted.map((h, i) => {
+                  const colorIdx = byValue.findIndex(b => b.eodhd === h.eodhd)
+                  const swatch   = colorIdx < 14 ? COLORS[colorIdx] : '#424753'
+                  return (
+                    <tr key={h.eodhd} className="hover:bg-surface-container-high transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: swatch }}></div>
+                          <span className="font-bold text-primary">{h.eodhd.split('.')[0]}</span>
+                          <ExchPill exch={h.exch} />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-on-surface truncate max-w-[200px]">{h.name}</td>
+                      <td className="px-6 py-4 text-right tabular text-sm font-semibold">{fmtCcy(h.value)}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="px-2 py-1 bg-primary-container/10 text-primary text-[11px] font-bold rounded-sm tabular">{fmt(h.pct, 1)}%</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

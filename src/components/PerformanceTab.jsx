@@ -1,35 +1,34 @@
 import { useState, useCallback } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { fmtCcy, fmt } from '../utils'
-import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { fmtCcy, fmt, fmtPct } from '../utils'
 
 const PERIODS = [
-  { label:'1W', days:7 }, { label:'1M', days:30 }, { label:'3M', days:90 },
-  { label:'6M', days:180 }, { label:'1Y', days:365 }, { label:'Custom', days:null },
+  { label:'1W', days:7   }, { label:'1M', days:30  }, { label:'3M', days:90  },
+  { label:'6M', days:180 }, { label:'1Y', days:365  }, { label:'Custom', days:null },
 ]
 
 function addDays(date, n) {
   const d = new Date(date); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:10, padding:'10px 14px', fontSize:12 }}>
-      <div style={{ color:'#a0aec0', marginBottom:4 }}>{label}</div>
-      <div style={{ fontWeight:800, fontSize:16 }}>{fmtCcy(payload[0]?.value)}</div>
+    <div className="bg-surface-container-highest border border-outline-variant/20 p-3 rounded-lg shadow-xl">
+      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-base font-black tabular">{fmtCcy(payload[0]?.value)}</p>
     </div>
   )
 }
 
-export default function PerformanceTab({ prices }) {
-  const today = new Date().toISOString().split('T')[0]
-  const [period, setPeriod] = useState('1M')
-  const [fromDate, setFrom] = useState(addDays(today, -30))
-  const [toDate, setTo] = useState(today)
-  const [chartData, setChart] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+export default function PerformanceTab({ prices, portfolio }) {
+  const today    = new Date().toISOString().split('T')[0]
+  const [period,   setPeriod]   = useState('1M')
+  const [fromDate, setFromDate] = useState(addDays(today, -30))
+  const [toDate,   setToDate]   = useState(today)
+  const [chart,    setChart]    = useState(null)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState(null)
 
   const getFrom = useCallback(() => {
     if (period === 'Custom') return fromDate
@@ -39,18 +38,19 @@ export default function PerformanceTab({ prices }) {
   const load = useCallback(async () => {
     setLoading(true); setError(null); setChart(null)
     try {
-      const from = getFrom()
-      const res = await fetch(`/api/history?t=${PORTFOLIO.map(h => h.eodhd).join(',')}&from=${from}&to=${toDate}`)
+      const from    = getFrom()
+      const tickers = portfolio.map(h => h.eodhd).join(',')
+      const res     = await fetch(`/api/history?s=${tickers}&from=${from}&to=${toDate}`)
       const history = await res.json()
       const latestPrice = {}
-      PORTFOLIO.forEach(h => { latestPrice[h.eodhd] = prices[h.eodhd]?.close ?? null })
+      portfolio.forEach(h => { latestPrice[h.eodhd] = prices[h.eodhd]?.close ?? null })
       const dateSet = new Set()
       Object.values(history).forEach(arr => arr.forEach(d => dateSet.add(d.date)))
       const points = Array.from(dateSet).sort().map(date => {
         let total = 0
-        PORTFOLIO.forEach(h => {
+        portfolio.forEach(h => {
           const entry = (history[h.eodhd] || []).find(d => d.date === date)
-          const lp = latestPrice[h.eodhd]
+          const lp    = latestPrice[h.eodhd]
           total += (entry && lp && lp > 0) ? (entry.close / lp) * h.value : h.value
         })
         return { date, value: Math.round(total) }
@@ -58,87 +58,108 @@ export default function PerformanceTab({ prices }) {
       setChart(points)
     } catch { setError('Failed to load history. Try again.') }
     finally { setLoading(false) }
-  }, [getFrom, toDate, prices])
+  }, [getFrom, toDate, prices, portfolio])
 
-  const startVal = chartData?.[0]?.value
-  const endVal = chartData?.[chartData?.length - 1]?.value
-  const change = startVal && endVal ? endVal - startVal : null
-  const changePct = startVal && endVal ? ((endVal - startVal) / startVal) * 100 : null
-  const isUp = change != null && change >= 0
-  const minVal = chartData ? Math.min(...chartData.map(d => d.value)) : 0
-  const maxVal = chartData ? Math.max(...chartData.map(d => d.value)) : 0
-  const yPad = (maxVal - minVal) * 0.1 || 10000
+  const startVal  = chart?.[0]?.value
+  const endVal    = chart?.[chart.length - 1]?.value
+  const change    = startVal != null && endVal != null ? endVal - startVal : null
+  const changePct = startVal && change != null ? (change / startVal) * 100 : null
+  const isUp      = change != null && change >= 0
+  const minVal    = chart ? Math.min(...chart.map(d => d.value)) : null
+  const maxVal    = chart ? Math.max(...chart.map(d => d.value)) : null
 
   return (
-    <>
-      <div style={{ display:'flex', gap:8, marginBottom:20, alignItems:'center', flexWrap:'wrap' }}>
-        {PERIODS.map(p => (
-          <button key={p.label} onClick={() => setPeriod(p.label)} style={{
-            padding:'7px 16px', borderRadius:20, fontSize:12, fontWeight:600,
-            border: period===p.label ? 'none' : '1px solid #e2e8f0',
-            background: period===p.label ? '#3182ce' : '#fff',
-            color: period===p.label ? '#fff' : '#4a5568', cursor:'pointer',
-          }}>{p.label}</button>
-        ))}
-        {period === 'Custom' && <>
-          <input type="date" value={fromDate} max={toDate} onChange={e => setFrom(e.target.value)}
-            style={{ padding:'6px 10px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:12 }} />
-          <span style={{ color:'#a0aec0', fontSize:12 }}>to</span>
-          <input type="date" value={toDate} min={fromDate} max={today} onChange={e => setTo(e.target.value)}
-            style={{ padding:'6px 10px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:12 }} />
-        </>}
-        <button onClick={load} disabled={loading} style={{
-          padding:'7px 20px', borderRadius:8, fontSize:12, fontWeight:700,
-          border:'none', background: loading ? '#a0aec0' : '#3182ce', color:'#fff', cursor: loading ? 'not-allowed' : 'pointer',
-        }}>{loading ? 'Loading…' : 'Load'}</button>
+    <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-24">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+        <div>
+          <div className="text-xs font-bold tracking-widest uppercase text-on-surface-variant mb-1 flex items-center gap-2">
+            <span className="opacity-50">Analytics</span>
+            <span className="material-symbols-outlined text-sm">chevron_right</span>
+            <span className="text-primary">Performance History</span>
+          </div>
+          <h2 className="text-4xl font-bold tracking-tight">Portfolio Performance</h2>
+          <p className="text-on-surface-variant mt-1 text-sm">Historical NAV · EOD prices via EODHD</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center bg-surface-container-low p-1 rounded-lg gap-0.5">
+            {PERIODS.map(p => (
+              <button key={p.label} onClick={() => setPeriod(p.label)}
+                className={`px-4 py-2 text-xs font-bold rounded transition-colors ${period === p.label ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={load} disabled={loading}
+            className="bg-primary text-on-primary px-5 py-2 rounded font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+            {loading ? 'Loading…' : 'Load'}
+          </button>
+        </div>
       </div>
 
-      {chartData && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
-          {[
-            { label:'Start Value', value:fmtCcy(startVal), bg:'#f7fafc', border:'#e2e8f0', color:'#2d3748' },
-            { label:'End Value',   value:fmtCcy(endVal),   bg:'#f7fafc', border:'#e2e8f0', color:'#2d3748' },
-            { label:'Change ($)',  value: change != null ? `${isUp?'+':''}${fmtCcy(change)}` : '—', bg: isUp?'#f0fff4':'#fff5f5', border: isUp?'#c6f6d5':'#fed7d7', color: isUp?'#38a169':'#e53e3e' },
-            { label:'Change (%)',  value: changePct != null ? `${isUp?'+':''}${fmt(changePct)}%` : '—', bg: isUp?'#f0fff4':'#fff5f5', border: isUp?'#c6f6d5':'#fed7d7', color: isUp?'#38a169':'#e53e3e' },
-          ].map(k => (
-            <div key={k.label} className="card" style={{ background:k.bg, border:`1px solid ${k.border}`, padding:'14px 18px' }}>
-              <div style={{ fontSize:11, color:'#718096', fontWeight:600, textTransform:'uppercase', letterSpacing:'.5px', marginBottom:4 }}>{k.label}</div>
-              <div style={{ fontSize:22, fontWeight:800, color:k.color }}>{k.value}</div>
+      {/* Custom date inputs */}
+      {period === 'Custom' && (
+        <div className="flex gap-4 mb-6">
+          {[['From', fromDate, setFromDate], ['To', toDate, setToDate]].map(([label, val, setter]) => (
+            <div key={label}>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1">{label}</label>
+              <input type="date" value={val} onChange={e => setter(e.target.value)}
+                className="bg-surface-container border border-outline-variant/20 text-on-surface px-3 py-2 text-sm rounded" />
             </div>
           ))}
         </div>
       )}
 
-      <div className="card">
-        {!chartData && !loading && !error && (
-          <div style={{ textAlign:'center', padding:60, color:'#a0aec0' }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>📈</div>
-            <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Select a period and click Load</div>
-            <div style={{ fontSize:12 }}>Historical portfolio value based on EOD prices</div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        {[
+          { label:'Start Value',  val: startVal  ? fmtCcy(startVal)  : '—', accent:'border-primary'           },
+          { label:'End Value',    val: endVal    ? fmtCcy(endVal)    : '—', accent:'border-primary-container'  },
+          { label:'Change $',     val: change    != null ? fmtCcy(Math.abs(change))          : '—', color: change    == null ? '' : isUp ? 'text-secondary' : 'text-error', prefix: change    != null ? (isUp ? '+' : '-') : '' },
+          { label:'Change %',     val: changePct != null ? fmt(Math.abs(changePct), 2) + '%' : '—', color: changePct == null ? '' : isUp ? 'text-secondary' : 'text-error', prefix: changePct != null ? (isUp ? '+' : '-') : '' },
+          { label:'Min Value',    val: minVal    ? fmtCcy(minVal)    : '—' },
+          { label:'Max Value',    val: maxVal    ? fmtCcy(maxVal)    : '—' },
+        ].map((s, i) => (
+          <div key={i} className={`bg-surface-container p-5 rounded-md ${s.accent ? `border-t-4 ${s.accent}` : ''}`}>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant block mb-2">{s.label}</span>
+            <div className={`text-lg font-bold tabular ${s.color || ''}`}>{s.prefix || ''}{s.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div className="bg-surface-container rounded-md p-6 mb-8">
+        {!chart && !loading && !error && (
+          <div className="flex flex-col items-center justify-center h-64 text-on-surface-variant">
+            <span className="material-symbols-outlined text-5xl mb-3 opacity-20">monitoring</span>
+            <p className="font-semibold">Select a period and click Load</p>
+            <p className="text-sm">Historical portfolio value based on EOD prices</p>
           </div>
         )}
-        {loading && <div style={{ textAlign:'center', padding:60, color:'#a0aec0' }}><div className="spinner" style={{ margin:'0 auto 12px' }} /><div style={{ fontSize:14 }}>Fetching historical prices…</div><div style={{ fontSize:12, marginTop:6 }}>This may take 10–20 seconds</div></div>}
-        {error && <div style={{ textAlign:'center', padding:40, color:'#e53e3e' }}>{error}</div>}
-        {chartData && chartData.length > 0 && <>
-          <div style={{ fontSize:14, fontWeight:700, color:'#4a5568', marginBottom:4 }}>Portfolio Value Over Time</div>
-          <div style={{ fontSize:11, color:'#a0aec0', marginBottom:16 }}>Approximate · based on EOD prices</div>
-          <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={chartData} margin={{ top:10, right:10, left:10, bottom:0 }}>
+        {error   && <div className="flex items-center justify-center h-64 text-error">{error}</div>}
+        {loading && (
+          <div className="flex items-center justify-center h-64 text-on-surface-variant">
+            <span className="material-symbols-outlined animate-spin text-3xl mr-3">progress_activity</span>Fetching historical prices…
+          </div>
+        )}
+        {chart && !loading && (
+          <ResponsiveContainer width="100%" height={380}>
+            <AreaChart data={chart} margin={{ top:10, right:0, left:10, bottom:0 }}>
               <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={isUp?'#3182ce':'#e53e3e'} stopOpacity={0.2} />
-                  <stop offset="95%" stopColor={isUp?'#3182ce':'#e53e3e'} stopOpacity={0} />
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor="#508ff8" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#508ff8" stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" tick={{ fontSize:11 }} tickLine={false} tickFormatter={d => d.slice(5)} interval="preserveStartEnd" />
-              <YAxis domain={[minVal-yPad, maxVal+yPad]} tick={{ fontSize:11 }} tickLine={false} axisLine={false} tickFormatter={v => '$'+(v/1000).toFixed(0)+'k'} width={60} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#424753" strokeOpacity={0.3} />
+              <XAxis dataKey="date" tick={{ fill:'#c2c6d5', fontSize:10, fontWeight:600 }} tickLine={false} axisLine={false} tickFormatter={d => d.slice(5)} />
+              <YAxis tick={{ fill:'#c2c6d5', fontSize:10, fontWeight:600 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={60} />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={startVal} stroke="#e2e8f0" strokeDasharray="4 4" />
-              <Area type="monotone" dataKey="value" stroke={isUp?'#3182ce':'#e53e3e'} strokeWidth={2} fill="url(#grad)" />
+              <Area type="monotone" dataKey="value" stroke="#acc7ff" strokeWidth={2.5} fill="url(#areaGrad)" dot={false} activeDot={{ r:5, fill:'#acc7ff', strokeWidth:0 }} />
             </AreaChart>
           </ResponsiveContainer>
-        </>}
+        )}
       </div>
-    </>
+    </div>
   )
 }

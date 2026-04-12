@@ -1,54 +1,40 @@
 import { useState } from 'react'
 import ExchPill from './ExchPill'
-import { fmtCcy, fmt } from '../utils'
-import { PORTFOLIO, TOTAL_PORTFOLIO } from '../data/portfolio'
+import { fmtCcy, fmt, fmtPct } from '../utils'
 
-const COLS = [
-  { key: 'eodhd',  label: 'Ticker',   num: false },
-  { key: 'name',   label: 'Name',     num: false },
-  { key: 'value',  label: 'Value',    num: true  },
-  { key: 'weight', label: 'Weight',   num: true  },
-  { key: 'close',  label: 'Close',    num: true  },
-  { key: 'pct',    label: '% Today',  num: true  },
-]
-
-const STRING_COLS = new Set(['eodhd', 'name'])
+const STR_COLS = new Set(['eodhd','name'])
 
 function safeSort(a, b, col, dir) {
   try {
-    const av = a[col]
-    const bv = b[col]
-    if (STRING_COLS.has(col)) {
-      const as = String(av ?? '')
-      const bs = String(bv ?? '')
-      return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+    if (STR_COLS.has(col)) {
+      return dir === 'asc' ? String(a[col]??'').localeCompare(String(b[col]??'')) : String(b[col]??'').localeCompare(String(a[col]??''))
     }
-    const an = parseFloat(av)
-    const bn = parseFloat(bv)
-    const aOk = isFinite(an)
-    const bOk = isFinite(bn)
-    if (!aOk && !bOk) return 0
-    if (!aOk) return 1
-    if (!bOk) return -1
+    const an = parseFloat(a[col]), bn = parseFloat(b[col])
+    const aOk = isFinite(an), bOk = isFinite(bn)
+    if (!aOk && !bOk) return 0; if (!aOk) return 1; if (!bOk) return -1
     return dir === 'asc' ? an - bn : bn - an
   } catch { return 0 }
 }
 
-export default function HoldingsTab({ prices, loading, deleted, deleteTicker, restoreTicker, restoreAll }) {
-  const [sortCol,    setSortCol]    = useState('value')
-  const [sortDir,    setSortDir]    = useState('desc')
-  const [filter,     setFilter]     = useState('')
-  const [exchFilter, setExchFilter] = useState('All')
+export default function HoldingsTab({ prices, loading, portfolio, totalValue, deleted, deleteTicker, restoreTicker, restoreAll }) {
+  const [sortCol,     setSortCol]     = useState('value')
+  const [sortDir,     setSortDir]     = useState('desc')
+  const [filter,      setFilter]      = useState('')
+  const [exchFilter,  setExchFilter]  = useState('All')
   const [showDeleted, setShowDeleted] = useState(false)
 
-  const rows = PORTFOLIO.map(h => ({
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('desc') }
+  }
+
+  const rows = portfolio.map(h => ({
     ...h,
-    weight: (h.value / TOTAL_PORTFOLIO) * 100,
+    weight: (h.value / totalValue) * 100,
     ...(prices[h.eodhd] || {}),
   }))
 
-  const exchanges = ['All', ...Array.from(new Set(PORTFOLIO.map(h => h.exch))).sort()]
-
+  const exchanges   = ['All', ...Array.from(new Set(portfolio.map(h => h.exch))).sort()]
   const activeRows  = rows.filter(r => !deleted.has(r.eodhd))
   const deletedRows = rows.filter(r =>  deleted.has(r.eodhd))
 
@@ -58,162 +44,117 @@ export default function HoldingsTab({ prices, loading, deleted, deleteTicker, re
     const matchExch = exchFilter === 'All' || r.exch === exchFilter
     return matchText && matchExch
   })
-
   const sorted = [...filtered].sort((a, b) => safeSort(a, b, sortCol, sortDir))
 
-  const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(col); setSortDir('desc') }
-  }
-
-  const SortIcon = ({ col }) => {
-    if (sortCol !== col) return <span style={{ color: '#cbd5e1' }}>⇅</span>
-    return <span style={{ color: '#3182ce' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
-  }
+  const pctColor = (v) => v == null ? 'text-on-surface-variant' : v > 0 ? 'text-secondary' : v < 0 ? 'text-error' : 'text-on-surface-variant'
+  const thCls    = "px-4 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest cursor-pointer hover:text-on-surface select-none"
 
   return (
-    <>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
-          placeholder="🔍  Search ticker or name…"
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          style={{
-            flex: 1, minWidth: 200, padding: '8px 14px', borderRadius: 8,
-            border: '1px solid #e2e8f0', fontSize: 13, outline: 'none',
-            background: '#f7fafc', color: '#2d3748'
-          }}
-        />
-        <div style={{ display: 'flex', gap: 6 }}>
-          {exchanges.map(ex => (
-            <button key={ex} onClick={() => setExchFilter(ex)} style={{
-              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-              border: exchFilter === ex ? 'none' : '1px solid #e2e8f0',
-              background: exchFilter === ex ? '#3182ce' : '#fff',
-              color: exchFilter === ex ? '#fff' : '#4a5568', cursor: 'pointer',
-            }}>
-              {ex}
-            </button>
-          ))}
+    <div className="max-w-[1400px] mx-auto px-6 pt-8 pb-24">
+      {/* Search + filters */}
+      <section className="mb-8 space-y-4">
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/50">search</span>
+          <input
+            type="text" value={filter} onChange={e => setFilter(e.target.value)}
+            placeholder="Search by ticker or name…"
+            className="w-full bg-surface-container-low border border-outline-variant/20 text-on-surface placeholder:text-on-surface-variant/40 py-4 pl-12 pr-4 text-base font-light rounded-lg focus:outline-none focus:border-primary transition-colors"
+          />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {exchanges.map(f => (
+              <button key={f} onClick={() => setExchFilter(f)}
+                className={`px-4 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-colors ${exchFilter === f ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant hover:text-on-surface'}`}>
+                {f}
+              </button>
+            ))}
+            {deleted.size > 0 && (
+              <button onClick={() => setShowDeleted(s => !s)}
+                className="px-4 py-1.5 rounded-sm bg-surface-container-low text-on-surface-variant/60 text-xs font-medium italic border border-outline-variant/10">
+                {deleted.size} hidden
+              </button>
+            )}
+          </div>
           {deleted.size > 0 && (
-            <button onClick={() => setShowDeleted(v => !v)} style={{
-              fontSize: 12, color: '#718096', background: 'none', border: '1px solid #e2e8f0',
-              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-            }}>
-              {showDeleted ? 'Hide deleted' : `${deleted.size} hidden`}
+            <button onClick={restoreAll} className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">restore</span>Restore all
             </button>
           )}
-          <div style={{ fontSize: 12, color: '#a0aec0' }}>
-            {sorted.length} holdings
-            {loading && <span style={{ marginLeft: 8, color: '#3182ce' }}>· loading…</span>}
-          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Active holdings table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
-        <table style={{ width: '100%' }}>
-          <thead>
+      {/* Table */}
+      <div className="bg-surface-container rounded-lg overflow-hidden border border-outline-variant/5">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-surface-container-low">
             <tr>
-              <th style={{ paddingLeft: 16 }}>#</th>
-              {COLS.map(c => (
-                <th key={c.key} className={c.num ? 'num' : ''} onClick={() => toggleSort(c.key)}
-                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                  {c.label} <SortIcon col={c.key} />
+              <th className="px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">#</th>
+              {[['eodhd','Ticker'],['name','Name'],['value','Value'],['weight','Weight'],['close','Close'],['pct','% Today']].map(([col, label]) => (
+                <th key={col} className={`${thCls} ${['value','weight','close','pct'].includes(col) ? 'text-right' : ''}`} onClick={() => toggleSort(col)}>
+                  {label}
+                  {sortCol === col
+                    ? <span className="text-primary ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                    : <span className="text-on-surface-variant/30 ml-1">↕</span>}
                 </th>
               ))}
-              <th></th>
+              <th className="px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-center">Actions</th>
             </tr>
           </thead>
-          <tbody>
-            {sorted.map((r, i) => {
-              const pctNum = parseFloat(r.pct)
-              const pctOk  = r.ok && isFinite(pctNum)
+          <tbody className="divide-y divide-outline-variant/10">
+            {sorted.map((h, i) => {
+              const pctNum = parseFloat(h.pct)
               return (
-                <tr key={r.eodhd}>
-                  <td style={{ color: '#cbd5e1', fontSize: 11, paddingLeft: 16 }}>{i + 1}</td>
-                  <td>
-                    <span style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd}</span>
-                    {' '}<ExchPill exch={r.exch} />
+                <tr key={h.eodhd} className="hover:bg-surface-container-high transition-colors group">
+                  <td className="px-6 py-5 text-sm tabular font-medium text-on-surface-variant">{String(i+1).padStart(2,'0')}</td>
+                  <td className="px-4 py-5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-primary">{h.eodhd.split('.')[0]}</span>
+                      <ExchPill exch={h.exch} />
+                    </div>
                   </td>
-                  <td style={{ fontSize: 12, color: '#4a5568', maxWidth: 200 }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                  <td className="px-4 py-5 text-sm font-medium text-on-surface">{h.name}</td>
+                  <td className="px-4 py-5 text-sm tabular text-right font-medium">{fmtCcy(h.value)}</td>
+                  <td className="px-4 py-5 text-sm tabular text-right">{fmt(h.weight, 2)}%</td>
+                  <td className="px-4 py-5 text-sm tabular text-right font-medium">{h.close != null ? fmt(h.close) : '—'}</td>
+                  <td className={`px-4 py-5 text-sm tabular text-right font-bold ${pctColor(isNaN(pctNum) ? null : pctNum)}`}>
+                    {h.pct != null ? fmtPct(pctNum) : '—'}
                   </td>
-                  <td className="num" style={{ fontSize: 12, fontWeight: 600 }}>{fmtCcy(r.value)}</td>
-                  <td className="num" style={{ fontSize: 12 }}>
-                    <span style={{ color: '#a0aec0' }}>{fmt(r.weight, 1)}%</span>
-                  </td>
-                  <td className="num" style={{ fontSize: 12 }}>
-                    {isFinite(parseFloat(r.close)) ? fmt(r.close) : <span style={{ color: '#cbd5e1' }}>—</span>}
-                  </td>
-                  <td className="num">
-                    {pctOk ? (
-                      <span style={{ fontWeight: 700, fontSize: 13 }}
-                        className={pctNum > 0 ? 'green' : pctNum < 0 ? 'red' : 'grey'}>
-                        {pctNum > 0 ? '+' : ''}{fmt(pctNum)}%
-                      </span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ paddingRight: 12, textAlign: 'right' }}>
-                    <button
-                      onClick={() => deleteTicker(r.eodhd)}
-                      title="Hide holding"
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#cbd5e1', fontSize: 14, padding: '2px 4px',
-                        borderRadius: 4, lineHeight: 1,
-                      }}
-                      onMouseEnter={e => e.target.style.color = '#e53e3e'}
-                      onMouseLeave={e => e.target.style.color = '#cbd5e1'}
-                    >
-                      ✕
+                  <td className="px-6 py-5 text-center">
+                    <button onClick={() => deleteTicker(h.eodhd)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-error" title="Hide">
+                      <span className="material-symbols-outlined text-lg">close</span>
                     </button>
                   </td>
                 </tr>
               )
             })}
+            {sorted.length === 0 && (
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-on-surface-variant">No holdings match your search.</td></tr>
+            )}
+            {showDeleted && deletedRows.map(h => (
+              <tr key={`del-${h.eodhd}`} className="opacity-40 bg-surface-container-lowest/50">
+                <td className="px-6 py-4 text-xs text-on-surface-variant">—</td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-on-surface-variant line-through">{h.eodhd.split('.')[0]}</span>
+                    <ExchPill exch={h.exch} />
+                  </div>
+                </td>
+                <td className="px-4 py-4 text-sm text-on-surface-variant">{h.name}</td>
+                <td colSpan={4} className="px-4 py-4 text-center text-xs text-on-surface-variant italic">hidden</td>
+                <td className="px-6 py-4 text-center">
+                  <button onClick={() => restoreTicker(h.eodhd)} className="text-primary hover:underline text-xs font-bold">Restore</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Deleted / hidden holdings */}
-      {showDeleted && deleted.size > 0 && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>Hidden holdings ({deleted.size})</span>
-            <button onClick={restoreAll} style={{
-              fontSize: 12, color: '#3182ce', background: 'none', border: '1px solid #bee3f8',
-              borderRadius: 8, padding: '4px 12px', cursor: 'pointer',
-            }}>Restore all</button>
-          </div>
-          <table style={{ width: '100%' }}>
-            <tbody>
-              {deletedRows.map(r => (
-                <tr key={r.eodhd} style={{ opacity: 0.5 }}>
-                  <td style={{ paddingLeft: 16 }}>
-                    <span style={{ fontWeight: 700, fontSize: 12 }}>{r.eodhd}</span>
-                    {' '}<ExchPill exch={r.exch} />
-                  </td>
-                  <td style={{ fontSize: 12, color: '#718096' }}>{r.name}</td>
-                  <td className="num" style={{ fontSize: 12 }}>{fmtCcy(r.value)}</td>
-                  <td style={{ paddingRight: 12, textAlign: 'right' }}>
-                    <button onClick={() => restoreTicker(r.eodhd)} style={{
-                      fontSize: 11, color: '#3182ce', background: 'none',
-                      border: '1px solid #bee3f8', borderRadius: 6,
-                      padding: '3px 10px', cursor: 'pointer',
-                    }}>Restore</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="px-6 py-4 bg-surface-container-low flex justify-between items-center text-xs text-on-surface-variant">
+          <div>Showing <span className="text-on-surface font-bold">{sorted.length}</span> of <span className="text-on-surface font-bold">{activeRows.length}</span> active{deleted.size > 0 && ` · ${deleted.size} hidden`}</div>
+          {loading && <span className="text-primary animate-pulse">Refreshing prices…</span>}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   )
 }
