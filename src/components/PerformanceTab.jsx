@@ -59,10 +59,12 @@ export default function PerformanceTab({ prices, portfolio }) {
     ? portfolio.reduce((s, h) => {
         const p = prices[h.eodhd]
         if (!p?.ok || p.pct == null) return s
-        return s + parseFloat(p.pct) * (h.value / totalSnap)
+        const pctVal = parseFloat(p.pct)
+        if (!isFinite(pctVal)) return s
+        return s + pctVal * (h.value / totalSnap)
       }, 0)
     : null
-  const dayPct = dayPctRaw
+  const dayPct = (dayPctRaw != null && isFinite(dayPctRaw)) ? dayPctRaw : null
   const dayDollar = dayPct != null ? (totalSnap * dayPct) / 100 : null
 
   const load = useCallback(async (p) => {
