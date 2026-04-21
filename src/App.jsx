@@ -33,8 +33,7 @@ function lsGet(key) { try { return localStorage.getItem(key) } catch { return nu
 function lsSet(key, val) { try { localStorage.setItem(key, val) } catch {} }
 
 function loadPortfolio() {
-  const s = lsGet(SK_PORTFOLIO)
-  if (s) try { return JSON.parse(s) } catch {}
+  // Always use portfolio.js as source of truth — localStorage import disabled
   return null
 }
 
