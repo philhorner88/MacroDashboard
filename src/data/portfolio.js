@@ -1,4 +1,5 @@
-// Auto-generated from ShareSight Exposure Report — 12 Apr 2026
+// Auto-generated from ShareSight Exposure Report — 12 Apr 2026 + extra broker (Stake)
+// Active equity holdings + passive ETFs (passive: true)
 // ETF wrappers excluded (VAS, VDHG, VGS, VTS, VVLU, WDMF, NDQ, IXJ, QUAL, CRED,
 //   ASIA, IIND, DFND, VBLD, CETF, HACK, MOAT, RPAR, KRBN)
 // Bond ETFs excluded by default (TLT, IEI, BND, AGG, VGSH, GGOV, IAF) — toggle in importer
@@ -6,43 +7,43 @@
 // Multi-portfolio positions summed (10 portfolios merged)
 // 91 direct holdings: 41 AU · 37 US · 13 EU
 
-export const TOTAL_PORTFOLIO = 1814022.06
+export const TOTAL_PORTFOLIO = 3677950.63
 
 export const PORTFOLIO = [
   { eodhd:'AUR.AU'              , name:'Auris Minerals'                                             , value:150000.00, exch:'AU' },
-  { eodhd:'TTT.AU'              , name:'Titomic'                                        , value: 128690.64, exch:'AU' },
+  { eodhd:'TTT.AU'              , name:'Titomic'                                         , value: 128690.64, exch:'AU' },
   { eodhd:'A4N.AU'              , name:'Alpha Hpa'                                       , value:127843.75, exch:'AU' },
   { eodhd:'CDA.AU'              , name:'Codan'                                           , value:99726.32, exch:'AU' },
-  { eodhd:'GOOG.US'              , name:'Alphabet (GOOG+GOOGL)'                           , value: 116448.22, exch:'US' },
+  { eodhd:'GOOG.US'              , name:'Alphabet (GOOG+GOOGL)'                          , value:143643.79, exch:'US' },
   { eodhd:'MPW.AU'              , name:'Metal Powdworks'                                 , value:  75955.97, exch:'AU' },
-  { eodhd:'AMZN.US'             , name:'Amazon.com Inc.'                                 , value:  57455.42, exch:'US' },
+  { eodhd:'AMZN.US'             , name:'Amazon.com Inc.'                                 , value:82099.20, exch:'US' },
   { eodhd:'CAR.AU'              , name:'Car Group'                                       , value:55290.00, exch:'AU' },
   { eodhd:'AAPL.US'             , name:'Apple Inc'                                       , value:  51013.00, exch:'US' },
-  { eodhd:'MSFT.US'             , name:'Microsoft Corporation'                           , value:  49072.39, exch:'US' },
-  { eodhd:'TSM.US'              , name:'Taiwan Semiconductor Manufacturing - ADR'        , value:  46790.30, exch:'US' },
+  { eodhd:'MSFT.US'             , name:'Microsoft Corporation'                           , value:77126.56, exch:'US' },
+  { eodhd:'TSM.US'              , name:'Taiwan Semiconductor Manufacturing - ADR'        , value:62150.41, exch:'US' },
   { eodhd:'ALL.AU'              , name:'Aristocrat Leisure'                              , value:43908.75, exch:'AU' },
-  { eodhd:'AXP.US'              , name:'American Express Co.'                            , value:  42898.62, exch:'US' },
-  { eodhd:'SKY.AU'              , name:'Sky Metals'                                      , value:43344.19, exch:'AU' },
-  { eodhd:'SPOT.US'             , name:'Spotify Technology S.A.'                         , value:  39535.55, exch:'US' },
-  { eodhd:'SHOP.US'             , name:'Shopify Inc'                                     , value:  39271.92, exch:'US' },
+  { eodhd:'AXP.US'              , name:'American Express Co.'                            , value:65034.22, exch:'US' },
+  { eodhd:'SPOT.US'             , name:'Spotify Technology S.A.'                         , value:50041.02, exch:'US' },
+  { eodhd:'SHOP.US'             , name:'Shopify Inc'                                     , value:67232.93, exch:'US' },
   { eodhd:'REA.AU'              , name:'Rea Group'                                       , value:38568.54, exch:'AU' },
-  { eodhd:'META.US'             , name:'Meta Platforms Inc'                              , value:  34834.08, exch:'US' },
+  { eodhd:'META.US'             , name:'Meta Platforms Inc'                              , value:53592.72, exch:'US' },
   { eodhd:'ZIP.AU'              , name:'ZIP Co'                                          , value:  34778.26, exch:'AU' },
+  { eodhd:'SKY.AU'              , name:'Sky Metals'                                      , value:43344.19, exch:'AU' },
   { eodhd:'3DA.AU'              , name:'Amaero'                                          , value:35350.76, exch:'AU' },
   { eodhd:'NET.US'              , name:'Cloudflare Inc'                                  , value:  26911.18, exch:'US' },
-  { eodhd:'NVDA.US'             , name:'NVIDIA Corp'                                     , value:  26267.86, exch:'US' },
+  { eodhd:'NVDA.US'             , name:'NVIDIA Corp'                                     , value:37567.06, exch:'US' },
   { eodhd:'MQG.AU'              , name:'Macquarie Group'                                 , value:  25650.00, exch:'AU' },
   { eodhd:'V.US'                , name:'Visa Inc'                                        , value:  24181.46, exch:'US' },
   { eodhd:'JPM.US'              , name:'JPMorgan Chase & Co.'                            , value:  23089.88, exch:'US' },
-  { eodhd:'AIR.PA'              , name:'Airbus'                                          , value:  23328.66, exch:'EU' },
   { eodhd:'SKS.AU'              , name:'Sks Tech Group'                                  , value:  20893.60, exch:'AU' },
+  { eodhd:'AIR.PA'              , name:'Airbus'                                          , value:  23328.66, exch:'EU' },
   { eodhd:'GBR.AU'              , name:'Greatbould Resources'                            , value:  14999.93, exch:'AU' },
   { eodhd:'ASML.US'             , name:'ASML Holding NV - New York Shares'               , value:  14142.22, exch:'US' },
   { eodhd:'BLK.US'              , name:'Blackrock Inc.'                                  , value:  13698.26, exch:'US' },
   { eodhd:'QAN.AU'              , name:'Qantas Airways'                                  , value:  12838.43, exch:'AU' },
-  { eodhd:'MBG.F'               , name:'Mercedes-Benz'                                   , value:  12780.14, exch:'EU' },
   { eodhd:'EXPE.US'             , name:'Expedia Group Inc'                               , value:  12785.41, exch:'US' },
   { eodhd:'NFLX.US'             , name:'Netflix Inc.'                                    , value:  12107.20, exch:'US' },
+  { eodhd:'MBG.F'               , name:'Mercedes-Benz'                                   , value:  12780.14, exch:'EU' },
   { eodhd:'MC.PA'               , name:'LVMH'                                            , value:  21314.16, exch:'EU' },
   { eodhd:'MIN.AU'              , name:'Mineral Resources.'                              , value:  10088.52, exch:'AU' },
   { eodhd:'OML.AU'              , name:'Ooh!Media'                                       , value:   9432.55, exch:'AU' },
@@ -93,4 +94,20 @@ export const PORTFOLIO = [
   { eodhd:'VMT.AU'              , name:'Vmoto'                                           , value:    510.15, exch:'AU' },
   { eodhd:'BWX.AU'              , name:'Bwx'                                             , value:    389.60, exch:'AU' },
   { eodhd:'AVH.AU'              , name:'Avita Medical'                                   , value:      3.90, exch:'AU' },
+  { eodhd:'XGOV.AU'             , name:'VE XGOV Govt Bond ETF'                       , value: 250394.40, exch:'AU', passive: true  },
+  { eodhd:'GHLD.AU'             , name:'GBLX Gold ETF'                                , value:  54066.99, exch:'AU', passive: true  },
+  { eodhd:'TLT.US'              , name:'iShares 20+ Year Treasury Bond ETF'           , value:18254.38, exch:'US', passive: true  },
+  // New active equities from HSBC Singapore
+  { eodhd:'FIG.US'        , name:'Figma Inc'                               , value:   6139.05, exch:'US'},
+  { eodhd:'MU.US'         , name:'Micron Technology'                       , value:  12537.82, exch:'US'},
+  // Passive ETFs from HSBC Singapore
+  { eodhd:'IDEF.US'       , name:'BlackRock Defined Outcome ETF'           , value: 143522.45, exch:'US', passive: true },
+  { eodhd:'QQQM.US'       , name:'Invesco NASDAQ 100 ETF'                  , value: 341759.83, exch:'US', passive: true },
+  { eodhd:'LQD.US'        , name:'iShares iBoxx Corp Bond ETF'             , value:   7691.10, exch:'US', passive: true },
+  { eodhd:'SHYG.US'       , name:'iShares 0-5 HY Corp Bond ETF'            , value:  11933.33, exch:'US', passive: true },
+  { eodhd:'AOA.US'        , name:'iShares Core 80/20 ETF'                  , value:  22569.47, exch:'US', passive: true },
+  { eodhd:'IHAK.US'       , name:'iShares Cybersec & Tech ETF'             , value: 146383.06, exch:'US', passive: true },
+  { eodhd:'IAU.US'        , name:'iShares Gold Trust'                      , value:  73691.01, exch:'US', passive: true },
+  { eodhd:'VCRB.US'       , name:'Vanguard Core Bond ETF'                  , value:  19597.72, exch:'US', passive: true },
+  { eodhd:'VT.US'         , name:'Vanguard Total World Stock ETF'          , value: 569474.41, exch:'US', passive: true },
 ]
