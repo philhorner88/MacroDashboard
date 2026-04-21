@@ -30,10 +30,15 @@ function CustomTooltip({ active, payload }) {
 }
 
 export default function ExposureTab({ prices, portfolio, totalValue, deleted }) {
-  const [sortCol, setSortCol] = useState('value')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sortCol,    setSortCol]    = useState('value')
+  const [sortDir,    setSortDir]    = useState('desc')
+  const [typeFilter, setTypeFilter] = useState('active')
 
-  const active      = portfolio.filter(h => !deleted.has(h.eodhd))
+  const allActive   = portfolio.filter(h => !h.passive)
+  const allPassive  = portfolio.filter(h =>  h.passive)
+  const active      = typeFilter === 'all'     ? portfolio.filter(h => !deleted.has(h.eodhd))
+                    : typeFilter === 'passive' ? allPassive.filter(h => !deleted.has(h.eodhd))
+                    : allActive.filter(h => !deleted.has(h.eodhd))
   const activeTotal = active.reduce((s, h) => s + h.value, 0)
   const byValue     = [...active].sort((a, b) => b.value - a.value)
   const top14       = byValue.slice(0, 14)
@@ -59,6 +64,17 @@ export default function ExposureTab({ prices, portfolio, totalValue, deleted }) 
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 md:px-6 py-6 md:py-10 pb-24 space-y-6 md:space-y-8">
+
+      {/* Type filter */}
+      <div className="flex items-center gap-2 mb-6">
+        {[['active','Active Equities'],['passive','Passive ETFs'],['all','All Holdings']].map(([val, label]) => (
+          <button key={val} onClick={() => setTypeFilter(val)}
+            className={`px-4 py-2 rounded text-xs font-bold transition-colors ${typeFilter === val ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}>
+            {label}
+          </button>
+        ))}
+        <span className="text-xs text-on-surface-variant ml-2">{active.length} holdings</span>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 md:gap-6">
@@ -111,8 +127,6 @@ export default function ExposureTab({ prices, portfolio, totalValue, deleted }) 
           <div className="p-4 md:p-6 border-b border-outline-variant/10">
             <h2 className="text-base md:text-lg font-bold">Full Ledger</h2>
           </div>
-
-          {/* Mobile: simplified list */}
           <div className="md:hidden max-h-[400px] overflow-y-auto">
             {sorted.map((h, i) => {
               const colorIdx = byValue.findIndex(b => b.eodhd === h.eodhd)
@@ -135,8 +149,6 @@ export default function ExposureTab({ prices, portfolio, totalValue, deleted }) 
               )
             })}
           </div>
-
-          {/* Desktop: full table */}
           <div className="hidden md:block overflow-x-auto max-h-[520px] overflow-y-auto">
             <table className="w-full text-left border-collapse">
               <thead className="bg-surface-container-low sticky top-0">
