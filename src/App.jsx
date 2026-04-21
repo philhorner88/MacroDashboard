@@ -6,6 +6,7 @@ import NewsTab            from './components/NewsTab'
 import PerformanceTab     from './components/PerformanceTab'
 import SessionWrapTab     from './components/SessionWrapTab'
 import SharesightImporter from './components/SharesightImporter'
+import PassiveTab        from './components/PassiveTab'
 import { PORTFOLIO as DEFAULT_PORTFOLIO, TOTAL_PORTFOLIO as DEFAULT_TOTAL } from './data/portfolio'
 import { fetchAllPrices } from './data/api'
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'overview',    label: 'Overview',    icon: 'dashboard'             },
   { id: 'exposure',    label: 'Exposure',    icon: 'pie_chart'             },
   { id: 'holdings',    label: 'Holdings',    icon: 'account_balance_wallet'},
+  { id: 'passive',     label: 'Passive',     icon: 'account_balance'       },
   { id: 'news',        label: 'News',        icon: 'article'               },
   { id: 'performance', label: 'Performance', icon: 'monitoring'            },
   { id: 'wrap',        label: 'Session',     icon: 'flag'                  },
@@ -174,6 +176,7 @@ export default function App() {
         {tab === 'overview'    && <OverviewTab    {...portfolioProps} {...deletedProps} prices={prices} loading={loading} today={TODAY} />}
         {tab === 'exposure'    && <ExposureTab    {...portfolioProps} {...deletedProps} prices={prices} loading={loading} />}
         {tab === 'holdings'    && <HoldingsTab    {...portfolioProps} {...deletedProps} prices={prices} loading={loading} />}
+        {tab === 'passive'     && <PassiveTab     {...portfolioProps} prices={prices} loading={loading} />}
         {tab === 'news'        && <NewsTab        {...portfolioProps} />}
         {tab === 'performance' && <PerformanceTab {...portfolioProps} prices={prices} />}
         {tab === 'wrap'        && <SessionWrapTab {...portfolioProps} {...deletedProps} prices={prices} loading={loading} />}
